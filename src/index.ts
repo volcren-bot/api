@@ -40,14 +40,24 @@ app.use(cors())
 // The webapp owns the logo, so the docs page links to it instead of keeping a copy.
 // The OpenAPI plugin has no favicon option, so add the icon link to its docs page.
 const FAVICON_URL = "https://volcren.com/favicon.svg"
+const FAVICON_ICO_URL = "https://volcren.com/favicon.ico"
+
+// Browsers request /favicon.ico on their own, so send them to the webapp's copy.
+app.get("/favicon.ico", ({ redirect }) => redirect(FAVICON_ICO_URL, 301), {
+	detail: { hide: true }
+})
+
 app.onAfterHandle(async ({ path, responseValue }) => {
 	if (path !== "/docs" && path !== "/docs/") return
 	if (!(responseValue instanceof Response)) return
 	const html = await responseValue.text()
-	return new Response(html.replace("<head>", `<head><link rel="icon" href="${FAVICON_URL}" type="image/svg+xml" />`), {
-		status: responseValue.status,
-		headers: responseValue.headers
-	})
+	return new Response(
+		html.replace("<head>", `<head><link rel="icon" href="${FAVICON_URL}" type="image/svg+xml" />`),
+		{
+			status: responseValue.status,
+			headers: responseValue.headers
+		}
+	)
 })
 
 app.use(
