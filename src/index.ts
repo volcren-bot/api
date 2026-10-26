@@ -2,6 +2,7 @@ import { Elysia } from "elysia"
 import { cors } from "@elysiajs/cors"
 import { serverTiming } from "@elysiajs/server-timing"
 import { getClientIP } from "$lib/request"
+import { staticPlugin } from "@elysiajs/static"
 import openapi from "@elysiajs/openapi"
 import { autoload } from "elysia-autoload"
 export { t } from "elysia"
@@ -36,6 +37,20 @@ app.onError(({ code, error, set }) => {
 })
 
 app.use(cors())
+
+// Serves ./public at the root, e.g. /favicon.svg.
+app.use(staticPlugin({ assets: "public", prefix: "/" }))
+
+// The OpenAPI plugin has no favicon option, so add the icon link to its docs page.
+app.onAfterHandle(async ({ path, responseValue }) => {
+	if (path !== "/docs" && path !== "/docs/") return
+	if (!(responseValue instanceof Response)) return
+	const html = await responseValue.text()
+	return new Response(html.replace("<head>", `<head><link rel="icon" href="/favicon.svg" type="image/svg+xml" />`), {
+		status: responseValue.status,
+		headers: responseValue.headers
+	})
+})
 
 app.use(
 	openapi({
