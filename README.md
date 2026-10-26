@@ -55,7 +55,7 @@ Every endpoint except `GET /` takes `Authorization: Bearer <supabase access toke
 
 Stats ride on the heartbeat and are optional. `experience` and `gold` are the gain since the previous heartbeat. The script's limits (`stats.limits`) are per minute of runtime, and a pair of 0 and 0 means no limit. The runtime a report can claim is the smaller of `minutes` and the time the server saw pass since the previous report, so a launcher can't claim more than really elapsed. A rejected report returns `stats.accepted: false` with a reason and does not end the session.
 
-`custom` trackers are accepted but not stored yet: the database has no function to increment them.
+`custom` holds the deltas of the script's custom trackers (`stats.limits_custom`), in tracker order, and each has per-minute limits like the rest. The whole report is checked and stored by `stats.report_session` in one transaction, so a rejected report changes nothing.
 
 ## Layout
 
@@ -66,7 +66,7 @@ Stats ride on the heartbeat and are optional. `experience` and `gold` are the ga
 | `src/lib/auth.ts`       | Token check, ban check.                                         |
 | `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, stats. |
 | `src/lib/supabase.ts`   | Admin, anon and per-user clients.                               |
-| `src/lib/validation.ts` | Stats limits and runtime checks.                                |
+| `src/lib/validation.ts` | Runtime a report can claim.                                    |
 | `src/lib/types/`        | Generated database types and request schemas.                   |
 
 ## Known gaps

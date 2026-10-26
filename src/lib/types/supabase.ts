@@ -1046,6 +1046,16 @@ export type Database = {
         Returns: undefined
       }
       online_count: { Args: Record<PropertyKey, never>; Returns: number }
+      report_session: {
+        Args: {
+          p_custom?: number[]
+          p_experience: number
+          p_gold: number
+          p_minutes: number
+          p_session: string
+        }
+        Returns: undefined
+      }
       online_per_script: {
         Args: Record<PropertyKey, never>
         Returns: {

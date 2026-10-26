@@ -1,16 +1,5 @@
 import { t } from "elysia"
 import type { Static } from "elysia"
-import type { Database } from "./supabase"
-
-export type Limits = Pick<
-	Database["stats"]["Tables"]["limits"]["Row"],
-	"xp_min" | "xp_max" | "gp_min" | "gp_max"
->
-
-export interface CachedLimits {
-	limit: Limits
-	timestamp: number
-}
 
 export const UuidParams = t.Object({
 	id: t.String({ format: "uuid", error: "ID must be a valid UUID." })
@@ -32,7 +21,12 @@ export const StatsSchema = t.Object({
 		maximum: 60,
 		description: "Minutes of runtime the report covers, as measured by the launcher"
 	}),
-	custom: t.Optional(t.Array(t.Number(), { description: "Custom tracker deltas. Not stored yet." }))
+	custom: t.Optional(
+		t.Array(t.Number(), {
+			maxItems: 32,
+			description: "Custom tracker deltas, in the order of the script's trackers"
+		})
+	)
 })
 
 export type StatsPayload = Static<typeof StatsSchema>

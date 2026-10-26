@@ -1,14 +1,13 @@
 import { logError } from "./request"
 import { createUserClient, payments, scripts, stats, supabaseAdmin } from "./supabase"
-import { reportedMinutes, validateStats } from "./validation"
-import type { CachedLimits, Limits, StatsPayload } from "./types/collection"
+import { reportedMinutes } from "./validation"
+import type { StatsPayload } from "./types/collection"
 import type { Caller } from "./auth"
 
 /** Bump when a launcher endpoint changes in a way old launchers can't handle. `GET /launcher/me` reports it. */
 export const API_VERSION = 1
 export const HEARTBEAT_SECONDS = 60
 export const SIGNED_URL_SECONDS = 60
-const LIMITS_CACHE_MS = 2 * 60 * 1000
 const MAX_LISTED = 200
 const ACCESS_CHECK_BATCH = 25
 
@@ -312,9 +311,7 @@ export async function heartbeat(
 		}
 	}
 
-	const reported = report
-		? await reportStats(sessionId, caller.id, session.script_id, report)
-		: undefined
+	const reported = report ? await reportStats(sessionId, report) : undefined
 	return {
 		result: { alive: true, credits, charged_until: after?.charged_until ?? null, stats: reported },
 		failure: null
@@ -339,70 +336,34 @@ export async function endSession(caller: Caller, sessionId: string) {
 	return { result: { charged: data ?? 0 }, failure: null }
 }
 
-const limitsCache = new Map<string, CachedLimits>()
-
-async function getLimits(scriptId: string): Promise<Limits | null> {
-	const cached = limitsCache.get(scriptId)
-	if (cached && Date.now() - cached.timestamp < LIMITS_CACHE_MS) return cached.limit
-	const { data, error } = await stats()
-		.from("limits")
-		.select("xp_min, xp_max, gp_min, gp_max")
-		.eq("id", scriptId)
-		.single()
-	if (error) {
-		logError("Failed to load the script limits.", error)
-		return null
-	}
-	limitsCache.set(scriptId, { limit: data, timestamp: Date.now() })
-	return data
-}
-
 export interface StatsOutcome {
 	accepted: boolean
 	reason?: string
 }
 
 /** A rejected report doesn't fail the heartbeat: the session must stay alive and billed correctly. */
-async function reportStats(
-	sessionId: string,
-	userId: string,
-	scriptId: string,
-	report: StatsPayload
-): Promise<StatsOutcome> {
+async function reportStats(sessionId: string, report: StatsPayload): Promise<StatsOutcome> {
 	const now = Date.now()
 	const since = openedAt.get(sessionId) ?? now - HEARTBEAT_SECONDS * 1000
 	const minutes = reportedMinutes(report.minutes, now - since)
 	openedAt.set(sessionId, now)
 
-	const limits = await getLimits(scriptId)
-	if (!limits) return { accepted: false, reason: "This script doesn't accept stats yet." }
-
-	const invalid = validateStats(limits, report, minutes)
-	if (invalid != null) return { accepted: false, reason: invalid }
-
-	const runtime = Math.round(minutes * 60 * 1000)
-	const [script, user] = await Promise.all([
-		stats().rpc("increment_script_stats", {
-			script_id: scriptId,
-			add_experience: report.experience,
-			add_gold: report.gold,
-			add_runtime: runtime
-		}),
-		stats().rpc("increment_user_stats", {
-			user_id: userId,
-			add_experience: report.experience,
-			add_gold: report.gold,
-			add_runtime: runtime
-		})
-	])
-	if (script.error || user.error) {
-		return {
-			accepted: false,
-			reason: logError("Failed to update the stats.", script.error ?? user.error)
-		}
+	// The database checks the report against the script's limits and stores it in one transaction.
+	const { error } = await stats().rpc("report_session", {
+		p_session: sessionId,
+		p_experience: Math.round(report.experience),
+		p_gold: Math.round(report.gold),
+		p_minutes: minutes,
+		p_custom: (report.custom ?? []).map(Math.round)
+	})
+	if (error) {
+		// Only the database's own messages for a refused report are meant for the loader.
+		if (error.code === "23514" || error.code === "22023")
+			return { accepted: false, reason: error.message }
+		return { accepted: false, reason: logError("Failed to update the stats.", error) }
 	}
 	return { accepted: true }
 }
 
 /** Test hook. */
-export const _internal = { openedAt, limitsCache }
+export const _internal = { openedAt }
