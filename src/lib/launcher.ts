@@ -185,7 +185,10 @@ export async function startSession(caller: Caller, scriptId: string) {
 		p_script: scriptId
 	})
 	if (error) {
-		const failure = mapStartError(error)
+		let failure = mapStartError(error)
+		// `can_access` also refuses a premium script when the balance is too short, so that arrives as a 403.
+		if (failure.code === 403 && (await lacksCredits(caller.id, scriptId)))
+			failure = mapStartError({ code: "23514" })
 		if (failure.code === 402) failure.required = await requiredBalance(scriptId)
 		return { session: null, failure }
 	}
@@ -232,6 +235,17 @@ export async function startSession(caller: Caller, scriptId: string) {
 		},
 		failure: null
 	}
+}
+
+/** Whether the only thing keeping the user from a script they can see is their balance. */
+async function lacksCredits(userId: string, scriptId: string) {
+	const { data: visible } = await scripts().rpc("can_view", {
+		viewer_id: userId,
+		script_id: scriptId
+	})
+	if (visible !== true) return false
+	const required = await requiredBalance(scriptId)
+	return required !== undefined && (await getCredits(userId)) < required
 }
 
 async function requiredBalance(scriptId: string) {
