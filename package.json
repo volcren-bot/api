@@ -1,0 +1,38 @@
+{
+	"name": "volcren-api",
+	"version": "0.1.0",
+	"description": "The launcher API for Volcren: sessions, billing heartbeats, script files and stats.",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "bun test",
+		"gentypes": "bun run src/lib/types/update.ts",
+		"dev": "bun run --watch src/index.ts",
+		"build": "bun build.ts",
+		"start": "NODE_ENV=production bun run src/index.ts",
+		"check": "tsc --noEmit",
+		"format": "prettier --write .",
+		"lint": "prettier --check . && eslint ."
+	},
+	"dependencies": {
+		"@elysiajs/cors": "^1.4.1",
+		"@elysiajs/openapi": "^1.4.13",
+		"@elysiajs/server-timing": "^1.4.0",
+		"@supabase/supabase-js": "^2.89.0",
+		"elysia": "^1.4.20",
+		"elysia-autoload": "^1.7.0",
+		"elysia-rate-limit": "^4.4.2",
+		"esbuild-plugin-autoload": "^0.3.3"
+	},
+	"devDependencies": {
+		"@eslint/compat": "^2.1.0",
+		"@eslint/js": "^10.0.1",
+		"bun-types": "^1.3.5",
+		"eslint": "^10.6.0",
+		"eslint-config-prettier": "^10.1.8",
+		"globals": "^17.7.0",
+		"prettier": "^3.9.4",
+		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.62.1"
+	}
+}

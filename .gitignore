@@ -1,0 +1,13 @@
+/node_modules
+/build
+/coverage
+.DS_Store
+
+# local env files
+.env
+.env.*
+!.env.example
+
+**/*.log
+**/*.trace
+bun.lockb
