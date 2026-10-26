@@ -18,7 +18,6 @@
 		"@elysiajs/cors": "^1.4.1",
 		"@elysiajs/openapi": "^1.4.13",
 		"@elysiajs/server-timing": "^1.4.0",
-		"@elysiajs/static": "^1.4.10",
 		"@supabase/supabase-js": "^2.89.0",
 		"elysia": "^1.4.20",
 		"elysia-autoload": "^1.7.0",

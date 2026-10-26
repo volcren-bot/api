@@ -8,7 +8,6 @@
         "@elysiajs/cors": "^1.4.1",
         "@elysiajs/openapi": "^1.4.13",
         "@elysiajs/server-timing": "^1.4.0",
-        "@elysiajs/static": "^1.4.10",
         "@supabase/supabase-js": "^2.89.0",
         "elysia": "^1.4.20",
         "elysia-autoload": "^1.7.0",
@@ -42,8 +41,6 @@
     "@elysiajs/openapi": ["@elysiajs/openapi@1.4.16", "", { "peerDependencies": { "@sinclair/typebox": ">= 0.34.0 < 1", "elysia": ">= 1.4.0", "typescript": ">= 5.0.0" } }, "sha512-kj8RBffE4J6myjm7nPPj6Dw1ujWt45NkdGW5sG9u3T0OfUzKN71s630/LEjajGo5jRZqFF3VHyk40lwXH2AbmQ=="],
 
     "@elysiajs/server-timing": ["@elysiajs/server-timing@1.4.1", "", { "peerDependencies": { "elysia": ">= 1.4.0" } }, "sha512-S87H2Mnd1p2T7fkeiuGy7za0u4Xq5cRnBIQ5q7lIspkROIUsZBwjVIsazW8GvK4h75V39GhzLOcFjjrGEpUPwg=="],
-
-    "@elysiajs/static": ["@elysiajs/static@1.4.10", "", { "peerDependencies": { "elysia": ">= 1.4.0" } }, "sha512-BN/3PZVWjqkL/6TM7RH69Pae89CfU0OqfEYPeBp2hB/GR5Euds39Wy+0ug9Vbvu++GG4tRRANf2QjaLnriJveg=="],
 
     "@eslint-community/eslint-utils": ["@eslint-community/eslint-utils@4.10.1", "", { "dependencies": { "eslint-visitor-keys": "^3.4.3" }, "peerDependencies": { "eslint": "^6.0.0 || ^7.0.0 || >=8.0.0" } }, "sha512-cuadcxVFE8sDK6iWJbs8Sn0av2Nrh2QSGQhVlBW9AaAHqHwjWsZHT8LJ4hFGPh7ASBV2deFdM7H/DPjulmh8rg=="],
 
