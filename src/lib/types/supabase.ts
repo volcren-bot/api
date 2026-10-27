@@ -390,6 +390,7 @@ export type Database = {
       start_session: {
         Args: { p_script: string; p_user: string }
         Returns: {
+          entry: string
           files: string[]
           revision: number
           session_id: string
@@ -882,6 +883,7 @@ export type Database = {
       versions: {
         Row: {
           created_at: string
+          entry: string
           files: string[]
           id: string
           published_at: string | null
@@ -892,6 +894,7 @@ export type Database = {
         ComputedFields: never
         Insert: {
           created_at?: string
+          entry?: string
           files: string[]
           id: string
           published_at?: string | null
@@ -901,6 +904,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          entry?: string
           files?: string[]
           id?: string
           published_at?: string | null

@@ -347,6 +347,7 @@ export async function startSession(caller: Caller, scriptId: string) {
 			session_id: started.session_id,
 			revision: started.revision,
 			price: price?.price ?? 0,
+			entry: started.entry,
 			files: started.files.map((name, i) => ({ name, url: signed[i].signedUrl })),
 			heartbeat_seconds: HEARTBEAT_SECONDS
 		},
