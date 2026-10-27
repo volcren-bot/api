@@ -20,6 +20,29 @@ describe("mapStartError", () => {
 	})
 })
 
+describe("redeemFailure", () => {
+	test("ok is not a failure", () => {
+		expect(launcher.redeemFailure("ok")).toBeNull()
+	})
+
+	test("each refusal has its own status and reason", () => {
+		expect(launcher.redeemFailure("invalid")).toMatchObject({ code: 404, reason: "invalid" })
+		expect(launcher.redeemFailure("expired")).toMatchObject({ code: 410, reason: "expired" })
+		expect(launcher.redeemFailure("used")).toMatchObject({ code: 409, reason: "used" })
+		expect(launcher.redeemFailure("own")).toMatchObject({ code: 409, reason: "own" })
+		expect(launcher.redeemFailure("already_access")).toMatchObject({ code: 409 })
+		expect(launcher.redeemFailure("rate_limited")).toMatchObject({ code: 429 })
+	})
+
+	test("a status from a newer database is treated as invalid, never as success", () => {
+		expect(launcher.redeemFailure("something_new")).toMatchObject({ code: 404, reason: "invalid" })
+	})
+})
+
+test("the API version moved on for launchers that don't know community scripts", () => {
+	expect(launcher.API_VERSION).toBeGreaterThanOrEqual(2)
+})
+
 test("revisions live in a nine digit folder", () => {
 	expect(launcher.revisionFolder("abc", 7)).toBe("abc/000000007")
 })

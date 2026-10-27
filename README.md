@@ -27,25 +27,38 @@ Optional: `HOST`, `PORT`, and `MAX_OPEN_SESSIONS` (sessions one user can have op
 
 Every endpoint except `GET /` takes `Authorization: Bearer <supabase access token>` and returns JSON. Errors are `{ "error": "message" }`.
 
-| Status | Meaning                                                                   |
-| ------ | ------------------------------------------------------------------------- |
-| 401    | Token missing, invalid or expired: refresh it and retry once.             |
-| 402    | Not enough credits to start. Body has `required`.                         |
-| 403    | Banned or deleted account, or no access to the script.                    |
-| 404    | No such session for this account (other people's sessions look the same). |
-| 409    | No live revision, or too many open sessions.                              |
-| 422    | Missing or invalid header, param or body.                                 |
-| 429    | Rate limited. `Retry-After` is in seconds.                                |
-| 502    | The script files couldn't be prepared. The session was ended, not billed. |
+| Status | Meaning                                                                       |
+| ------ | ----------------------------------------------------------------------------- |
+| 401    | Token missing, invalid or expired: refresh it and retry once.                 |
+| 402    | Not enough credits to start. Body has `required`.                             |
+| 403    | Banned or deleted account, or no access to the script.                        |
+| 404    | No such session for this account (other people's sessions look the same).     |
+| 409    | No live revision, too many open sessions, or a share code that can't be used. |
+| 410    | The share code has expired.                                                   |
+| 422    | Missing or invalid header, param or body.                                     |
+| 429    | Rate limited. `Retry-After` is in seconds.                                    |
+| 502    | The script files couldn't be prepared. The session was ended, not billed.     |
 
-| Endpoint                                | Returns                                                                                                                                |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /`                                 | `{ api_version }`. Public.                                                                                                             |
-| `GET /launcher/me`                      | `{ username, avatar_url, role, credits, min_balance_minutes, api_version }`                                                            |
-| `GET /launcher/scripts?q=&category=`    | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, cover_url, can_access, author, online }] }`      |
-| `POST /launcher/sessions`               | Body `{ script_id }`. `{ session_id, revision, price, files: [{ name, url }], heartbeat_seconds }`. URLs expire in 60 s.               |
-| `POST /launcher/sessions/:id/heartbeat` | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, credits, charged_until, stats?: { accepted, reason? } }` |
-| `POST /launcher/sessions/:id/end`       | `{ charged }`. Safe to repeat.                                                                                                         |
+| Endpoint                                        | Returns                                                                                                                                               |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /`                                         | `{ api_version }`. Public.                                                                                                                            |
+| `GET /launcher/me`                              | `{ username, avatar_url, role, credits, min_balance_minutes, api_version }`                                                                           |
+| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, cover_url, can_access, community, granted, author, online }] }` |
+| `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                            |
+| `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                          |
+| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, files: [{ name, url }], heartbeat_seconds }`. URLs expire in 60 s.                              |
+| `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, credits, charged_until, stats?: { accepted, reason? } }`                |
+| `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                        |
+
+### Community scripts and share codes
+
+A script is **official** when its author is a scripter or above and **community** otherwise (`community: true` in the list). The default list has the published official scripts, the community scripts the account wrote or was granted, and granted official scripts even when unpublished. `?community=true` lists every community script the account can see and needs the tester role (403 otherwise).
+
+Community scripts are never premium and run for their author, tester+ and people holding a grant. A banned author's scripts disappear for everyone below moderator, and their running sessions end.
+
+`POST /launcher/scripts/redeem` redeems a single-use share code (64 hex digits, whitespace and case are forgiven). The database marks the code used and adds the grant in one step, so a code can never work twice. A grant makes the script appear in the list with `granted: true`, and premium scripts run free. Failures: `invalid` (404), `expired` (410), `used`, `own` (the account wrote the script or made the code) and `already_access` (409, the code stays unused), `rate_limited` (429). The API allows 5 redemptions a minute per user and 10 per IP, and the database stops answering an account after 10 failed attempts an hour. `DELETE /launcher/scripts/:id/grant` removes the script again; the code stays used.
+
+`api_version` is 2: launchers that predate community scripts would run them without the warning, so they are told to update.
 
 ### Sessions
 
@@ -66,7 +79,7 @@ Stats ride on the heartbeat and are optional. `experience` and `gold` are the ga
 | `src/lib/auth.ts`       | Token check, ban check.                                         |
 | `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, stats. |
 | `src/lib/supabase.ts`   | Admin, anon and per-user clients.                               |
-| `src/lib/validation.ts` | Runtime a report can claim.                                    |
+| `src/lib/validation.ts` | Runtime a report can claim.                                     |
 | `src/lib/types/`        | Generated database types and request schemas.                   |
 
 ## Known gaps

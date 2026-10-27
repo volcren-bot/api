@@ -32,6 +32,13 @@ export const StatsSchema = t.Object({
 export type StatsPayload = Static<typeof StatsSchema>
 
 export const HeartbeatBody = t.Object({ stats: t.Optional(StatsSchema) })
+export const RedeemBody = t.Object({
+	code: t.String({
+		minLength: 1,
+		maxLength: 128,
+		description: "The share code, 64 hex digits"
+	})
+})
 export const StartBody = t.Object({
 	script_id: t.String({ format: "uuid", error: "script_id must be a valid UUID." })
 })

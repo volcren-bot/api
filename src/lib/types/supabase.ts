@@ -34,6 +34,35 @@ export type Database = {
   }
   info: {
     Tables: {
+      acceptances: {
+        Row: {
+          accepted_at: string
+          kind: Database["info"]["Enums"]["kind"]
+          user_id: string
+          version: number
+        }
+        ComputedFields: never
+        Insert: {
+          accepted_at?: string
+          kind: Database["info"]["Enums"]["kind"]
+          user_id: string
+          version: number
+        }
+        Update: {
+          accepted_at?: string
+          kind?: Database["info"]["Enums"]["kind"]
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acceptances_document_fkey"
+            columns: ["kind", "version"]
+            referencedRelation: "documents"
+            referencedColumns: ["kind", "version"]
+          },
+        ]
+      }
       documents: {
         Row: {
           content: string
@@ -61,10 +90,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      accept_terms: {
+        Args: { p_kind: Database["info"]["Enums"]["kind"]; p_version: number }
+        Returns: undefined
+      }
     }
     Enums: {
-      kind: "privacy_policy" | "user_tos" | "scripter_tos"
+      kind: "privacy_policy" | "user_tos" | "scripter_tos" | "community_tos"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -472,6 +504,7 @@ export type Database = {
         Args: { provider: string; provider_id: string }
         Returns: string
       }
+      has_accepted_terms: { Args: { user_id: string }; Returns: boolean }
       is_banned: { Args: { user_id: string }; Returns: boolean }
       is_role:
         | {
@@ -564,6 +597,37 @@ export type Database = {
         }
         Relationships: []
       }
+      config: {
+        Row: {
+          id: boolean
+          max_community_bytes: number
+          max_community_scripts: number
+          max_open_share_codes: number
+          max_share_code_days: number
+          redeem_max_failures: number
+          redeem_window_minutes: number
+        }
+        ComputedFields: never
+        Insert: {
+          id?: boolean
+          max_community_bytes?: number
+          max_community_scripts?: number
+          max_open_share_codes?: number
+          max_share_code_days?: number
+          redeem_max_failures?: number
+          redeem_window_minutes?: number
+        }
+        Update: {
+          id?: boolean
+          max_community_bytes?: number
+          max_community_scripts?: number
+          max_open_share_codes?: number
+          max_share_code_days?: number
+          redeem_max_failures?: number
+          redeem_window_minutes?: number
+        }
+        Relationships: []
+      }
       deploy_tokens: {
         Row: {
           created_at: string
@@ -596,6 +660,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "deploy_tokens_script_id_fkey"
+            columns: ["script_id"]
+            referencedRelation: "scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grants: {
+        Row: {
+          code_id: string
+          granted_at: string
+          script_id: string
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          code_id: string
+          granted_at?: string
+          script_id: string
+          user_id: string
+        }
+        Update: {
+          code_id?: string
+          granted_at?: string
+          script_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grants_code_id_fkey"
+            columns: ["code_id"]
+            referencedRelation: "share_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grants_script_id_fkey"
             columns: ["script_id"]
             referencedRelation: "scripts"
             referencedColumns: ["id"]
@@ -669,6 +768,22 @@ export type Database = {
           },
         ]
       }
+      redeem_attempts: {
+        Row: {
+          attempted_at: string
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          attempted_at?: string
+          user_id: string
+        }
+        Update: {
+          attempted_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       scripts: {
         Row: {
           content: string
@@ -677,8 +792,11 @@ export type Database = {
           published: boolean
           title: string
           url: string
+          author_banned: boolean | null
+          is_community: boolean | null
+          is_granted: boolean | null
         }
-        ComputedFields: never
+        ComputedFields: "author_banned" | "is_community" | "is_granted"
         Insert: {
           content: string
           description: string
@@ -696,6 +814,47 @@ export type Database = {
           url?: string
         }
         Relationships: []
+      }
+      share_codes: {
+        Row: {
+          code_hash: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          redeemed_at: string | null
+          redeemed_by: string | null
+          script_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          code_hash: string
+          created_at?: string
+          created_by?: string
+          expires_at: string
+          id?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          script_id: string
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          script_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "share_codes_script_id_fkey"
+            columns: ["script_id"]
+            referencedRelation: "scripts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       slugs: {
         Row: {
@@ -727,6 +886,7 @@ export type Database = {
           id: string
           published_at: string | null
           revision: number
+          sizes: number[]
           status: Database["scripts"]["Enums"]["version_status"]
         }
         ComputedFields: never
@@ -736,6 +896,7 @@ export type Database = {
           id: string
           published_at?: string | null
           revision: number
+          sizes?: number[]
           status?: Database["scripts"]["Enums"]["version_status"]
         }
         Update: {
@@ -744,6 +905,7 @@ export type Database = {
           id?: string
           published_at?: string | null
           revision?: number
+          sizes?: number[]
           status?: Database["scripts"]["Enums"]["version_status"]
         }
         Relationships: [
@@ -760,13 +922,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      author_banned: {
+        Args: { s: Database["scripts"]["Tables"]["scripts"]["Row"] }
+        Returns: boolean
+      }
+      author_is_banned: { Args: { script_id: string }; Returns: boolean }
+      author_is_community: { Args: { script_id: string }; Returns: boolean }
       can_access:
         | { Args: { accesser_id: string; script_id: string }; Returns: boolean }
         | { Args: { script_id: string }; Returns: boolean }
+      can_create_script: { Args: Record<PropertyKey, never>; Returns: boolean }
       can_upload: { Args: { object_name: string }; Returns: boolean }
       can_view: {
         Args: { script_id: string; viewer_id: string }
         Returns: boolean
+      }
+      create_share_code: {
+        Args: { p_expires_at: string; p_script: string }
+        Returns: {
+          code: string
+          expires_at: string
+          id: string
+        }[]
+      }
+      delete_expired_share_codes: {
+        Args: Record<PropertyKey, never>
+        Returns: number
       }
       discard_version: {
         Args: { revision: number; script_id: string }
@@ -779,9 +960,30 @@ export type Database = {
           username: string
         }[]
       }
+      get_community_usage: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          max_bytes: number
+          max_scripts: number
+          script_count: number
+          used_bytes: number
+        }[]
+      }
       get_revision: { Args: { script_id: string }; Returns: number }
+      has_grant: {
+        Args: { script_id: string; user_id: string }
+        Returns: boolean
+      }
       is_author: {
         Args: { script_id: string; user_id: string }
+        Returns: boolean
+      }
+      is_community: {
+        Args: { s: Database["scripts"]["Tables"]["scripts"]["Row"] }
+        Returns: boolean
+      }
+      is_granted: {
+        Args: { s: Database["scripts"]["Tables"]["scripts"]["Row"] }
         Returns: boolean
       }
       is_object_author: {
@@ -789,12 +991,21 @@ export type Database = {
         Returns: boolean
       }
       is_premium: { Args: { script_id: string }; Returns: boolean }
+      is_reviewable: { Args: { script_id: string }; Returns: boolean }
       is_stage: {
         Args: {
           script_id: string
           target_stage: Database["scripts"]["Enums"]["stage"]
         }
         Returns: boolean
+      }
+      list_grantees: {
+        Args: { p_script: string }
+        Returns: {
+          granted_at: string
+          user_id: string
+          username: string
+        }[]
       }
       max_stage: {
         Args: {
@@ -814,7 +1025,19 @@ export type Database = {
         Args: { revision: number; script_id: string }
         Returns: undefined
       }
+      redeem_share_code: {
+        Args: { p_code: string }
+        Returns: {
+          script_id: string
+          status: string
+          url: string
+        }[]
+      }
       safe_uuid: { Args: { value: string }; Returns: string }
+      storage_used: {
+        Args: { author_id: string; reserve_pending?: boolean }
+        Returns: number
+      }
       use_deploy_token: {
         Args: { p_script: string; p_token_hash: string }
         Returns: string
@@ -1046,6 +1269,13 @@ export type Database = {
         Returns: undefined
       }
       online_count: { Args: Record<PropertyKey, never>; Returns: number }
+      online_per_script: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          script_id: string
+          users: number
+        }[]
+      }
       report_session: {
         Args: {
           p_custom?: number[]
@@ -1055,13 +1285,6 @@ export type Database = {
           p_session: string
         }
         Returns: undefined
-      }
-      online_per_script: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          script_id: string
-          users: number
-        }[]
       }
     }
     Enums: {
@@ -1792,7 +2015,7 @@ export const Constants = {
   },
   info: {
     Enums: {
-      kind: ["privacy_policy", "user_tos", "scripter_tos"],
+      kind: ["privacy_policy", "user_tos", "scripter_tos", "community_tos"],
     },
   },
   payments: {

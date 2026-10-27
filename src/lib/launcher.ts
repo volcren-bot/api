@@ -1,18 +1,19 @@
 import { logError } from "./request"
 import { createUserClient, payments, scripts, stats, supabaseAdmin } from "./supabase"
-import { reportedMinutes } from "./validation"
+import { reportedMinutes, roleAtLeast } from "./validation"
 import type { StatsPayload } from "./types/collection"
 import type { Caller } from "./auth"
 
 /** Bump when a launcher endpoint changes in a way old launchers can't handle. `GET /launcher/me` reports it. */
-export const API_VERSION = 1
+export const API_VERSION = 2
 export const HEARTBEAT_SECONDS = 60
 export const SIGNED_URL_SECONDS = 60
 const MAX_LISTED = 200
 const ACCESS_CHECK_BATCH = 25
 
 export interface Failure {
-	code: 400 | 402 | 403 | 404 | 409 | 500 | 502
+	code: 400 | 402 | 403 | 404 | 409 | 410 | 429 | 500 | 502
+	reason?: string
 	error: string
 	required?: number
 }
@@ -63,40 +64,71 @@ function escapeLike(text: string) {
 	return text.replace(/[\\%_]/g, "\\$&")
 }
 
-export async function listScripts(caller: Caller, q: string, category: string) {
+const LIST_COLUMNS =
+	"id, url, title, description, published, metadata!inner(type, categories, stage, price), protected!inner(author, revision, updated_at)"
+
+/**
+ * The scripts the account sees, official and community.
+ *
+ * The default list is every published official script, plus the community scripts the account wrote
+ * or holds a grant on, plus granted official scripts even when unpublished. Row level security still
+ * decides what the account may see at all: a tester sees every community script, so the default list
+ * has to filter them out, and `community` (tester+) asks for exactly those.
+ */
+export async function listScripts(caller: Caller, q: string, category: string, community = false) {
+	if (community && !roleAtLeast(caller.role, "tester"))
+		return {
+			scripts: null,
+			failure: {
+				code: 403,
+				error: "Only testers can browse community scripts."
+			} satisfies Failure
+		}
+
 	const user = createUserClient(caller.token)
-	let query = user
-		.schema("scripts")
-		.from("scripts")
-		.select(
-			"id, url, title, description, published, metadata!inner(type, categories, stage, price), protected!inner(author, revision, updated_at)"
-		)
-		.eq("published", true)
-
 	const text = q.trim().toLowerCase()
-	if (text) {
-		const pattern = `"%${escapeLike(text).replace(/["\\]/g, "\\$&")}%"`
-		query = query.or(`title.ilike.${pattern},description.ilike.${pattern}`)
-	}
-	if (category) query = query.contains("metadata.categories", [category])
+	const pattern = text ? `"%${escapeLike(text).replace(/["\\]/g, "\\$&")}%"` : null
 
-	const { data, error } = await query.limit(MAX_LISTED)
-	if (error)
+	const base = () => {
+		let query = user.schema("scripts").from("scripts").select(LIST_COLUMNS)
+		if (pattern) query = query.or(`title.ilike.${pattern},description.ilike.${pattern}`)
+		if (category) query = query.contains("metadata.categories", [category])
+		return query.limit(MAX_LISTED)
+	}
+
+	const queries = community
+		? [base().eq("is_community", true)]
+		: [
+				base().eq("is_community", false).eq("published", true),
+				base().eq("is_granted", true),
+				base().eq("is_community", true).eq("protected.author", caller.id)
+			]
+	const results = await Promise.all(queries)
+	const failed = results.find((r) => r.error)
+	if (failed?.error)
 		return {
 			scripts: null,
 			failure: {
 				code: 500,
-				error: logError("Failed to load the scripts.", error)
+				error: logError("Failed to load the scripts.", failed.error)
 			} satisfies Failure
 		}
+
+	const found = new Map<
+		string,
+		(typeof results)[number]["data"] extends (infer T)[] | null ? T : never
+	>()
+	for (const r of results) for (const s of r.data ?? []) found.set(s.id, s)
+	const data = [...found.values()]
 
 	const ids = data.map((s) => s.id)
 	if (ids.length === 0) return { scripts: [], failure: null }
 
-	const [authors, online, access] = await Promise.all([
+	const [authors, online, access, flags] = await Promise.all([
 		scripts().rpc("get_authors", { script_ids: ids }),
 		stats().rpc("online_per_script"),
-		checkAccess(caller.id, ids)
+		checkAccess(caller.id, ids),
+		scriptFlags(user, ids)
 	])
 	const names = new Map((authors.data ?? []).map((a) => [a.script_id, a.username]))
 	const users = new Map((online.data ?? []).map((o) => [o.script_id, Number(o.users)]))
@@ -112,6 +144,7 @@ export async function listScripts(caller: Caller, q: string, category: string) {
 			return metadata && info ? [{ s, metadata, info }] : []
 		})
 		.sort((a, b) => b.info.updated_at.localeCompare(a.info.updated_at))
+		.slice(0, MAX_LISTED)
 		.map(({ s, metadata, info }) => ({
 			id: s.id,
 			url: s.url,
@@ -124,11 +157,25 @@ export async function listScripts(caller: Caller, q: string, category: string) {
 			revision: info.revision > 0 ? info.revision : null,
 			cover_url: `${imgs}/${s.id}/cover.webp`,
 			can_access: access.get(s.id) ?? false,
+			community: flags.get(s.id)?.community ?? false,
+			granted: flags.get(s.id)?.granted ?? false,
 			author: names.get(s.id) ?? "unknown",
 			online: users.get(s.id) ?? 0
 		}))
 
 	return { scripts: list, failure: null }
+}
+
+/** `is_community` and `is_granted` are computed columns of `scripts.scripts`: ask for them on the ids found. */
+async function scriptFlags(user: ReturnType<typeof createUserClient>, ids: string[]) {
+	const { data } = await user
+		.schema("scripts")
+		.from("scripts")
+		.select("id, is_community, is_granted")
+		.in("id", ids)
+	return new Map(
+		(data ?? []).map((r) => [r.id, { community: r.is_community, granted: r.is_granted }])
+	)
 }
 
 /** `scripts.can_access` knows the stage, role and balance rules, so ask it instead of copying them here. */
@@ -148,12 +195,82 @@ async function checkAccess(userId: string, ids: string[]) {
 /** Maps what `payments.start_session` raises to an HTTP answer. */
 export function mapStartError(error: { code?: string; message?: string }): Failure {
 	if (error.code === "42501")
-		return { code: 403, error: "You don't have access to this script, or your account is banned." }
+		return {
+			code: 403,
+			error: "You don't have access to this script, it's unavailable, or your account is banned."
+		}
 	if (error.code === "23514")
 		return { code: 402, error: "Not enough credits to start this script." }
 	if (error.message?.includes("no live revision"))
 		return { code: 409, error: "This script has no live revision yet." }
 	return { code: 500, error: logError("Failed to start the session.", error) }
+}
+
+/** How the database's answer to a redemption maps to an HTTP answer. `ok` is not a failure. */
+const REDEEM_FAILURES: Record<string, Failure> = {
+	invalid: { code: 404, error: "This share code is not valid.", reason: "invalid" },
+	expired: { code: 410, error: "This share code has expired.", reason: "expired" },
+	used: { code: 409, error: "This share code has already been used.", reason: "used" },
+	own: { code: 409, error: "You can't redeem your own share code.", reason: "own" },
+	already_access: {
+		code: 409,
+		error: "You already have access to this script.",
+		reason: "already_access"
+	},
+	rate_limited: {
+		code: 429,
+		error: "Too many failed attempts. Try again later.",
+		reason: "rate_limited"
+	}
+}
+
+export const redeemFailure = (status: string): Failure | null =>
+	status === "ok" ? null : (REDEEM_FAILURES[status] ?? REDEEM_FAILURES.invalid)
+
+/**
+ * Redeems a share code for the caller. The database does it as the caller (`auth.uid()`), in one step:
+ * the code is marked used and the grant added, so it can't work twice.
+ */
+export async function redeemCode(caller: Caller, code: string) {
+	const { data, error } = await createUserClient(caller.token)
+		.schema("scripts")
+		.rpc("redeem_share_code", { p_code: code })
+	if (error)
+		return {
+			redeemed: null,
+			failure:
+				error.code === "42501"
+					? ({ code: 403, error: "This account can't redeem codes." } satisfies Failure)
+					: ({ code: 500, error: logError("Failed to redeem the code.", error) } satisfies Failure)
+		}
+	const result = data[0]
+	const failure = redeemFailure(result?.status ?? "invalid")
+	if (failure || !result?.script_id)
+		return { redeemed: null, failure: failure ?? REDEEM_FAILURES.invalid }
+	return { redeemed: { script_id: result.script_id, url: result.url }, failure: null }
+}
+
+/** Removes a granted script from the caller's account. Row level security only lets them delete their own grant. */
+export async function removeGrant(caller: Caller, scriptId: string) {
+	const { data, error } = await createUserClient(caller.token)
+		.schema("scripts")
+		.from("grants")
+		.delete()
+		.eq("script_id", scriptId)
+		.eq("user_id", caller.id)
+		.select("script_id")
+	if (error)
+		return {
+			failure: {
+				code: 500,
+				error: logError("Failed to remove the script.", error)
+			} satisfies Failure
+		}
+	if (data.length === 0)
+		return {
+			failure: { code: 404, error: "This script isn't granted to your account." } satisfies Failure
+		}
+	return { failure: null }
 }
 
 export async function startSession(caller: Caller, scriptId: string) {
@@ -239,6 +356,12 @@ export async function startSession(caller: Caller, scriptId: string) {
 
 /** Whether the only thing keeping the user from a script they can see is their balance. */
 async function lacksCredits(userId: string, scriptId: string) {
+	// A script someone can run is never refused for credits (a banned author's script is refused for everyone).
+	const { data: runnable } = await scripts().rpc("can_access", {
+		accesser_id: userId,
+		script_id: scriptId
+	})
+	if (runnable === true) return false
 	const { data: visible } = await scripts().rpc("can_view", {
 		viewer_id: userId,
 		script_id: scriptId
