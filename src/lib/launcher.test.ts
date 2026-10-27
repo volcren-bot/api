@@ -20,6 +20,13 @@ describe("mapStartError", () => {
 	})
 })
 
+describe("hexKey", () => {
+	test("strips the bytea prefix PostgREST adds", () => {
+		expect(launcher.hexKey("\\x" + "ab".repeat(32))).toBe("ab".repeat(32))
+		expect(launcher.hexKey("ab".repeat(32))).toBe("ab".repeat(32))
+	})
+})
+
 describe("redeemFailure", () => {
 	test("ok is not a failure", () => {
 		expect(launcher.redeemFailure("ok")).toBeNull()

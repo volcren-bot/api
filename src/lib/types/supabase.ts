@@ -880,6 +880,28 @@ export type Database = {
           },
         ]
       }
+      version_keys: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          revision: number
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          id: string
+          key: string
+          revision: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          revision?: number
+        }
+        Relationships: []
+      }
       versions: {
         Row: {
           created_at: string
@@ -1027,6 +1049,10 @@ export type Database = {
       }
       publish_version: {
         Args: { revision: number; script_id: string }
+        Returns: undefined
+      }
+      set_version_key: {
+        Args: { key: string; revision: number; script_id: string }
         Returns: undefined
       }
       redeem_share_code: {

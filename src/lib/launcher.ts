@@ -335,6 +335,24 @@ export async function startSession(caller: Caller, scriptId: string) {
 		}
 	}
 
+	// Revisions published since files were encrypted have a key; older ones are plain and have none.
+	const { data: keyRow, error: keyErr } = await scripts()
+		.from("version_keys")
+		.select("key")
+		.eq("id", scriptId)
+		.eq("revision", started.revision)
+		.maybeSingle()
+	if (keyErr) {
+		await payments().rpc("end_session", { p_session: started.session_id, p_reason: "stopped" })
+		return {
+			session: null,
+			failure: {
+				code: 502,
+				error: logError("Failed to prepare the script files.", keyErr)
+			} satisfies Failure
+		}
+	}
+
 	const { data: price } = await payments()
 		.from("sessions")
 		.select("price")
@@ -349,11 +367,15 @@ export async function startSession(caller: Caller, scriptId: string) {
 			price: price?.price ?? 0,
 			entry: started.entry,
 			files: started.files.map((name, i) => ({ name, url: signed[i].signedUrl })),
+			key: keyRow ? hexKey(keyRow.key) : null,
 			heartbeat_seconds: HEARTBEAT_SECONDS
 		},
 		failure: null
 	}
 }
+
+/** PostgREST returns a bytea as `\x` followed by hex; the launcher wants the bare hex. */
+export const hexKey = (bytea: string) => bytea.replace(/^\\x/, "")
 
 /** Whether the only thing keeping the user from a script they can see is their balance. */
 async function lacksCredits(userId: string, scriptId: string) {

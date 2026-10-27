@@ -46,7 +46,7 @@ Every endpoint except `GET /` takes `Authorization: Bearer <supabase access toke
 | `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, cover_url, can_access, community, granted, author, online }] }` |
 | `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                            |
 | `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                          |
-| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, files: [{ name, url }], heartbeat_seconds }`. URLs expire in 60 s.                              |
+| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. `key` is explained under Sessions.                              |
 | `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, credits, charged_until, stats?: { accepted, reason? } }`                |
 | `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                        |
 
@@ -61,6 +61,8 @@ Community scripts are never premium and run for their author, tester+ and people
 `api_version` is 2: launchers that predate community scripts would run them without the warning, so they are told to update.
 
 ### Sessions
+
+Script files are stored encrypted (AES-256-GCM, see the database notes). `key` is the revision's key as 64 hex digits, or `null` for a revision published before encryption, whose files are plain. Each file is `nonce (12 bytes) || ciphertext || tag`, authenticated with `volcren:<script id>/<9-digit revision>/<file name>`. The key is only given to a started session and never logged.
 
 `price` is credits per minute, fixed when the session starts. Send a heartbeat every `heartbeat_seconds`; the database ends a session after 5 minutes without one. When `alive` is false, `reason` is `insufficient_credits`, `timeout` or `stopped`, and the launcher must stop the script.
 
