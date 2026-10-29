@@ -23,7 +23,7 @@ app.onAfterResponse((response) => {
 	console.log(`[${timestamp}]: [${set.status}] ${userAgent} ${ip} - ${request.method} ${path}`)
 })
 
-// Every error is JSON: { error }, so the launcher can always read the message.
+// Every error is JSON `{ error }` so the launcher can read it.
 app.onError(({ code, error, set }) => {
 	if (code === "VALIDATION") {
 		set.status = 422
@@ -37,8 +37,7 @@ app.onError(({ code, error, set }) => {
 
 app.use(cors())
 
-// The webapp owns the logo, so the docs page links to it instead of keeping a copy.
-// The OpenAPI plugin has no favicon option, so add the icon link to its docs page.
+// The OpenAPI plugin has no favicon option, so the docs page links to the webapp's icon.
 const FAVICON_URL = "https://volcren.com/favicon.svg"
 const FAVICON_ICO_URL = "https://volcren.com/favicon.ico"
 

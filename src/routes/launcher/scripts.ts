@@ -5,8 +5,7 @@ import { listScripts, redeemCode, removeGrant } from "$lib/launcher"
 import { normalizeShareCode } from "$lib/validation"
 import { AuthHeaders, RedeemBody, UuidParams } from "$lib/types/collection"
 
-// Share codes are 256 random bits, so guessing one is hopeless; these limits keep the database's own
-// per-account failure counter from being the only thing between a bot and the redeem function.
+// Extra guards so the database's failure counter isn't the only defense against code guessing.
 const redeemUserLimiter = createLimiter(5, 60 * 1000)
 const redeemIpLimiter = createLimiter(10, 60 * 1000)
 

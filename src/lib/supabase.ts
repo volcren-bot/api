@@ -5,7 +5,7 @@ const authOptions = {
 	auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
 }
 
-/** Bypasses RLS: the session and stats functions are service_role only. Holds no session, so one client is shared. */
+/** Bypasses RLS; the session and stats functions are service_role only. */
 export const supabaseAdmin = createClient<Database>(
 	process.env.SUPABASE_URL,
 	process.env.SUPABASE_SERVICE_KEY,

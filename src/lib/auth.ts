@@ -17,10 +17,7 @@ export function bearerToken(header: string | undefined | null) {
 	return header?.match(/^Bearer (\S+)$/i)?.[1] ?? null
 }
 
-/**
- * Every launcher endpoint starts here. 401 means the token is missing, invalid or expired, so the
- * launcher refreshes it and tries again. A deleted or banned account is a 403, which it must not retry.
- */
+/** Entry point of every launcher endpoint: 401 is retryable after a refresh, 403 is not. */
 export async function authenticate(header: string | undefined | null): Promise<AuthResult> {
 	const token = bearerToken(header)
 	if (!token) return { caller: null, code: 401, error: "Missing access token." }

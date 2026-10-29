@@ -67,14 +67,7 @@ function escapeLike(text: string) {
 const LIST_COLUMNS =
 	"id, url, title, description, published, metadata!inner(type, categories, stage, price), protected!inner(author, revision, updated_at)"
 
-/**
- * The scripts the account sees, official and community.
- *
- * The default list is every published official script, plus the community scripts the account wrote
- * or holds a grant on, plus granted official scripts even when unpublished. Row level security still
- * decides what the account may see at all: a tester sees every community script, so the default list
- * has to filter them out, and `community` (tester+) asks for exactly those.
- */
+/** Lists official and community scripts the account sees; `community` (tester+) lists only community ones. */
 export async function listScripts(caller: Caller, q: string, category: string, community = false) {
 	if (community && !roleAtLeast(caller.role, "tester"))
 		return {
@@ -166,7 +159,7 @@ export async function listScripts(caller: Caller, q: string, category: string, c
 	return { scripts: list, failure: null }
 }
 
-/** `is_community` and `is_granted` are computed columns of `scripts.scripts`: ask for them on the ids found. */
+/** `is_community` and `is_granted` are computed columns, so fetch them for the ids found. */
 async function scriptFlags(user: ReturnType<typeof createUserClient>, ids: string[]) {
 	const { data } = await user
 		.schema("scripts")
@@ -178,7 +171,7 @@ async function scriptFlags(user: ReturnType<typeof createUserClient>, ids: strin
 	)
 }
 
-/** `scripts.can_access` knows the stage, role and balance rules, so ask it instead of copying them here. */
+/** Asks `scripts.can_access` instead of duplicating its stage, role and balance rules. */
 async function checkAccess(userId: string, ids: string[]) {
 	const result = new Map<string, boolean>()
 	for (let i = 0; i < ids.length; i += ACCESS_CHECK_BATCH) {
@@ -206,7 +199,7 @@ export function mapStartError(error: { code?: string; message?: string }): Failu
 	return { code: 500, error: logError("Failed to start the session.", error) }
 }
 
-/** How the database's answer to a redemption maps to an HTTP answer. `ok` is not a failure. */
+/** Maps the database's redemption status to an HTTP failure; `ok` is not one. */
 const REDEEM_FAILURES: Record<string, Failure> = {
 	invalid: { code: 404, error: "This share code is not valid.", reason: "invalid" },
 	expired: { code: 410, error: "This share code has expired.", reason: "expired" },
@@ -227,10 +220,7 @@ const REDEEM_FAILURES: Record<string, Failure> = {
 export const redeemFailure = (status: string): Failure | null =>
 	status === "ok" ? null : (REDEEM_FAILURES[status] ?? REDEEM_FAILURES.invalid)
 
-/**
- * Redeems a share code for the caller. The database does it as the caller (`auth.uid()`), in one step:
- * the code is marked used and the grant added, so it can't work twice.
- */
+/** Redeems a share code as the caller, marking it used and adding the grant in one step. */
 export async function redeemCode(caller: Caller, code: string) {
 	const { data, error } = await createUserClient(caller.token)
 		.schema("scripts")
@@ -250,7 +240,7 @@ export async function redeemCode(caller: Caller, code: string) {
 	return { redeemed: { script_id: result.script_id, url: result.url }, failure: null }
 }
 
-/** Removes a granted script from the caller's account. Row level security only lets them delete their own grant. */
+/** Removes a granted script from the caller's account. */
 export async function removeGrant(caller: Caller, scriptId: string) {
 	const { data, error } = await createUserClient(caller.token)
 		.schema("scripts")
@@ -303,7 +293,7 @@ export async function startSession(caller: Caller, scriptId: string) {
 	})
 	if (error) {
 		let failure = mapStartError(error)
-		// `can_access` also refuses a premium script when the balance is too short, so that arrives as a 403.
+		// `can_access` refuses on a short balance too, which arrives as a 403.
 		if (failure.code === 403 && (await lacksCredits(caller.id, scriptId)))
 			failure = mapStartError({ code: "23514" })
 		if (failure.code === 402) failure.required = await requiredBalance(scriptId)
@@ -335,7 +325,7 @@ export async function startSession(caller: Caller, scriptId: string) {
 		}
 	}
 
-	// Revisions published since files were encrypted have a key; older ones are plain and have none.
+	// Older revisions are plain and have no key.
 	const { data: keyRow, error: keyErr } = await scripts()
 		.from("version_keys")
 		.select("key")
@@ -374,12 +364,12 @@ export async function startSession(caller: Caller, scriptId: string) {
 	}
 }
 
-/** PostgREST returns a bytea as `\x` followed by hex; the launcher wants the bare hex. */
+/** Strips PostgREST's `\x` bytea prefix. */
 export const hexKey = (bytea: string) => bytea.replace(/^\\x/, "")
 
-/** Whether the only thing keeping the user from a script they can see is their balance. */
+/** Whether only the balance keeps the user from a script they can see. */
 async function lacksCredits(userId: string, scriptId: string) {
-	// A script someone can run is never refused for credits (a banned author's script is refused for everyone).
+	// A runnable script is never refused for credits.
 	const { data: runnable } = await scripts().rpc("can_access", {
 		accesser_id: userId,
 		script_id: scriptId
@@ -401,10 +391,10 @@ async function requiredBalance(scriptId: string) {
 	return required ?? undefined
 }
 
-/** When each open session last reported, so a report can't claim more runtime than really passed. Per process, which is fine: a restart only makes the next report conservative. */
+/** When each open session last reported, to cap the runtime a report can claim. */
 const openedAt = new Map<string, number>()
 
-// Sessions the server ends (timeout, out of credits) never come back through here, so forget idle ones.
+// Server-ended sessions never come back here, so drop idle ones.
 setInterval(
 	() => {
 		const cutoff = Date.now() - 10 * 60 * 1000
@@ -427,7 +417,7 @@ export async function ownedSession(sessionId: string, userId: string) {
 				error: logError("Failed to load the session.", error)
 			} satisfies Failure
 		}
-	// A session of someone else looks the same as one that doesn't exist, so ids can't be probed.
+	// Someone else's session looks like a missing one, so ids can't be probed.
 	if (!data || data.user_id !== userId)
 		return { session: null, failure: { code: 404, error: "Session not found." } satisfies Failure }
 	return { session: data, failure: null }
@@ -501,14 +491,14 @@ export interface StatsOutcome {
 	reason?: string
 }
 
-/** A rejected report doesn't fail the heartbeat: the session must stay alive and billed correctly. */
+/** A rejected report doesn't fail the heartbeat. */
 async function reportStats(sessionId: string, report: StatsPayload): Promise<StatsOutcome> {
 	const now = Date.now()
 	const since = openedAt.get(sessionId) ?? now - HEARTBEAT_SECONDS * 1000
 	const minutes = reportedMinutes(report.minutes, now - since)
 	openedAt.set(sessionId, now)
 
-	// The database checks the report against the script's limits and stores it in one transaction.
+	// The database validates against the script's limits and stores it in one transaction.
 	const { error } = await stats().rpc("report_session", {
 		p_session: sessionId,
 		p_experience: Math.round(report.experience),
@@ -517,7 +507,7 @@ async function reportStats(sessionId: string, report: StatsPayload): Promise<Sta
 		p_custom: (report.custom ?? []).map(Math.round)
 	})
 	if (error) {
-		// Only the database's own messages for a refused report are meant for the loader.
+		// Only the database's refusal messages are meant for the loader.
 		if (error.code === "23514" || error.code === "22023")
 			return { accepted: false, reason: error.message }
 		return { accepted: false, reason: logError("Failed to update the stats.", error) }
