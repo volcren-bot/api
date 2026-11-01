@@ -39,16 +39,16 @@ Every endpoint except `GET /` takes `Authorization: Bearer <supabase access toke
 | 429    | Rate limited. `Retry-After` is in seconds.                                    |
 | 502    | The script files couldn't be prepared. The session was ended, not billed.     |
 
-| Endpoint                                        | Returns                                                                                                                                               |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /`                                         | `{ api_version }`. Public.                                                                                                                            |
-| `GET /launcher/me`                              | `{ username, avatar_url, role, credits, min_balance_minutes, api_version }`                                                                           |
-| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, cover_url, can_access, community, granted, author, online }] }` |
-| `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                            |
-| `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                          |
-| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. `key` is explained under Sessions.                              |
-| `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, credits, charged_until, stats?: { accepted, reason? } }`                |
-| `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                        |
+| Endpoint                                        | Returns                                                                                                                                                          |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /`                                         | `{ api_version }`. Public.                                                                                                                                       |
+| `GET /launcher/me`                              | `{ username, avatar_url, role, credits, min_balance_minutes, api_version }`                                                                                      |
+| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, cover_url, can_access, community, granted, author, online }] }`            |
+| `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                                       |
+| `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                                     |
+| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. `key` is explained under Sessions. |
+| `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, credits, charged_until, stats?: { accepted, reason? } }`                           |
+| `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                                   |
 
 ### Community scripts and share codes
 

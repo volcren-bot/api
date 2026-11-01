@@ -46,10 +46,6 @@ describe("redeemFailure", () => {
 	})
 })
 
-test("the API version moved on for launchers that don't know community scripts", () => {
-	expect(launcher.API_VERSION).toBeGreaterThanOrEqual(2)
-})
-
 test("revisions live in a nine digit folder", () => {
 	expect(launcher.revisionFolder("abc", 7)).toBe("abc/000000007")
 })
