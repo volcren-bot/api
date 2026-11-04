@@ -65,7 +65,7 @@ function escapeLike(text: string) {
 }
 
 const LIST_COLUMNS =
-	"id, url, title, description, published, metadata!inner(type, categories, stage, price), protected!inner(author, revision, updated_at)"
+	"id, url, title, description, published, is_community, is_granted, metadata!inner(type, categories, stage, price), protected!inner(author, revision, updated_at)"
 
 /** Lists official and community scripts the account sees; `community` (tester+) lists only community ones. */
 export async function listScripts(caller: Caller, q: string, category: string, community = false) {
@@ -117,11 +117,10 @@ export async function listScripts(caller: Caller, q: string, category: string, c
 	const ids = data.map((s) => s.id)
 	if (ids.length === 0) return { scripts: [], failure: null }
 
-	const [authors, online, access, flags] = await Promise.all([
+	const [authors, online, access] = await Promise.all([
 		scripts().rpc("get_authors", { script_ids: ids }),
 		stats().rpc("online_per_script"),
-		checkAccess(caller.id, ids),
-		scriptFlags(user, ids)
+		checkAccess(caller.id, ids)
 	])
 	const names = new Map((authors.data ?? []).map((a) => [a.script_id, a.username]))
 	const users = new Map((online.data ?? []).map((o) => [o.script_id, Number(o.users)]))
@@ -150,25 +149,13 @@ export async function listScripts(caller: Caller, q: string, category: string, c
 			revision: info.revision > 0 ? info.revision : null,
 			cover_url: `${imgs}/${s.id}/cover.webp`,
 			can_access: access.get(s.id) ?? false,
-			community: flags.get(s.id)?.community ?? false,
-			granted: flags.get(s.id)?.granted ?? false,
+			community: s.is_community === true,
+			granted: s.is_granted === true,
 			author: names.get(s.id) ?? "unknown",
 			online: users.get(s.id) ?? 0
 		}))
 
 	return { scripts: list, failure: null }
-}
-
-/** `is_community` and `is_granted` are computed columns, so fetch them for the ids found. */
-async function scriptFlags(user: ReturnType<typeof createUserClient>, ids: string[]) {
-	const { data } = await user
-		.schema("scripts")
-		.from("scripts")
-		.select("id, is_community, is_granted")
-		.in("id", ids)
-	return new Map(
-		(data ?? []).map((r) => [r.id, { community: r.is_community, granted: r.is_granted }])
-	)
 }
 
 /** Asks `scripts.can_access` instead of duplicating its stage, role and balance rules. */
@@ -307,12 +294,21 @@ export async function startSession(caller: Caller, scriptId: string) {
 		}
 
 	const folder = revisionFolder(scriptId, started.revision)
-	const { data: signed, error: signErr } = await supabaseAdmin.storage
-		.from("scripts")
-		.createSignedUrls(
-			started.files.map((name) => `${folder}/${name}`),
-			SIGNED_URL_SECONDS
-		)
+	// Older revisions are plain and have no key.
+	const [{ data: signed, error: signErr }, { data: keyRow, error: keyErr }, { data: price }] =
+		await Promise.all([
+			supabaseAdmin.storage.from("scripts").createSignedUrls(
+				started.files.map((name) => `${folder}/${name}`),
+				SIGNED_URL_SECONDS
+			),
+			scripts()
+				.from("version_keys")
+				.select("key")
+				.eq("id", scriptId)
+				.eq("revision", started.revision)
+				.maybeSingle(),
+			payments().from("sessions").select("price").eq("id", started.session_id).single()
+		])
 	if (signErr || signed.some((entry) => entry.error || !entry.signedUrl)) {
 		// Don't bill for a session the launcher can't use.
 		await payments().rpc("end_session", { p_session: started.session_id, p_reason: "stopped" })
@@ -325,13 +321,6 @@ export async function startSession(caller: Caller, scriptId: string) {
 		}
 	}
 
-	// Older revisions are plain and have no key.
-	const { data: keyRow, error: keyErr } = await scripts()
-		.from("version_keys")
-		.select("key")
-		.eq("id", scriptId)
-		.eq("revision", started.revision)
-		.maybeSingle()
 	if (keyErr) {
 		await payments().rpc("end_session", { p_session: started.session_id, p_reason: "stopped" })
 		return {
@@ -342,12 +331,6 @@ export async function startSession(caller: Caller, scriptId: string) {
 			} satisfies Failure
 		}
 	}
-
-	const { data: price } = await payments()
-		.from("sessions")
-		.select("price")
-		.eq("id", started.session_id)
-		.single()
 
 	openedAt.set(started.session_id, Date.now())
 	return {
@@ -441,12 +424,10 @@ export async function heartbeat(
 			} satisfies Failure
 		}
 
-	const { data: after } = await payments()
-		.from("sessions")
-		.select("end_reason, charged_until")
-		.eq("id", sessionId)
-		.single()
-	const credits = await getCredits(caller.id)
+	const [{ data: after }, credits] = await Promise.all([
+		payments().from("sessions").select("end_reason, charged_until").eq("id", sessionId).single(),
+		getCredits(caller.id)
+	])
 
 	if (!alive) {
 		openedAt.delete(sessionId)
