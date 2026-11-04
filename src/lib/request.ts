@@ -7,6 +7,17 @@ export function getClientIP(request: Request, server: IPServer | null | undefine
 	return request.headers.get("x-real-ip") ?? server?.requestIP(request)?.address ?? "unknown"
 }
 
+/** Request bodies are small, except a bug report, which carries a script log. */
+export const MAX_BODY_BYTES = 64 * 1024
+export const REPORT_BODY_BYTES = 512 * 1024
+
+/** Whether a declared body length is over the limit for its path. A body without a length is left to the server's limit. */
+export function bodyTooLarge(path: string, contentLength: string | null) {
+	const length = Number(contentLength)
+	if (!contentLength || !Number.isFinite(length)) return false
+	return length > (path.endsWith("/report") ? REPORT_BODY_BYTES : MAX_BODY_BYTES)
+}
+
 export function logError(message: string, detail?: unknown) {
 	const id = crypto.randomUUID().slice(0, 8)
 	console.error(`[${id}] ${message}`, detail ?? "")

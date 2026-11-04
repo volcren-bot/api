@@ -63,3 +63,23 @@ test("authenticate answers 401 without a token", async () => {
 	const result = await auth.authenticate(undefined)
 	expect(result.code).toBe(401)
 })
+
+describe("mapFeedbackError", () => {
+	test("maps the feedback functions' errors to the statuses the launcher expects", () => {
+		expect(launcher.mapFeedbackError({ code: "P0002" }).code).toBe(404)
+		expect(launcher.mapFeedbackError({ code: "22023" }).code).toBe(410)
+		expect(launcher.mapFeedbackError({ code: "54000" }).code).toBe(429)
+		expect(launcher.mapFeedbackError({ code: "42501" }).code).toBe(403)
+		expect(launcher.mapFeedbackError({ code: "23514", message: "too big" })).toMatchObject({
+			code: 422,
+			error: "too big"
+		})
+		expect(launcher.mapFeedbackError({ code: "XX000", message: "boom" }).code).toBe(500)
+	})
+})
+
+test("jsonBytes measures an attachment as the text it was sent as", () => {
+	expect(launcher.jsonBytes(undefined)).toBe(0)
+	expect(launcher.jsonBytes({ a: 1 })).toBe(7)
+	expect(launcher.jsonBytes({ a: "é" })).toBe(10)
+})

@@ -27,17 +27,18 @@ Optional: `HOST`, `PORT`, and `MAX_OPEN_SESSIONS` (sessions one user can have op
 
 Every endpoint except `GET /` takes `Authorization: Bearer <supabase access token>` and returns JSON. Errors are `{ "error": "message" }`.
 
-| Status | Meaning                                                                       |
-| ------ | ----------------------------------------------------------------------------- |
-| 401    | Token missing, invalid or expired: refresh it and retry once.                 |
-| 402    | Not enough credits to start. Body has `required`.                             |
-| 403    | Banned or deleted account, or no access to the script.                        |
-| 404    | No such session for this account (other people's sessions look the same).     |
-| 409    | No live revision, too many open sessions, or a share code that can't be used. |
-| 410    | The share code has expired.                                                   |
-| 422    | Missing or invalid header, param or body.                                     |
-| 429    | Rate limited. `Retry-After` is in seconds.                                    |
-| 502    | The script files couldn't be prepared. The session was ended, not billed.     |
+| Status | Meaning                                                                                 |
+| ------ | --------------------------------------------------------------------------------------- |
+| 401    | Token missing, invalid or expired: refresh it and retry once.                           |
+| 402    | Not enough credits to start. Body has `required`.                                       |
+| 403    | Banned or deleted account, or no access to the script.                                  |
+| 404    | No such session for this account (other people's sessions look the same).               |
+| 409    | No live revision, too many open sessions, or a share code that can't be used.           |
+| 410    | The share code has expired, or the session is older than 24 hours.                      |
+| 413    | The body is over 64 KiB (512 KiB for a bug report), or an attachment is over its limit. |
+| 422    | Missing or invalid header, param or body.                                               |
+| 429    | Rate limited. `Retry-After` is in seconds.                                              |
+| 502    | The script files couldn't be prepared. The session was ended, not billed.               |
 
 | Endpoint                                        | Returns                                                                                                                                                          |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -49,6 +50,9 @@ Every endpoint except `GET /` takes `Authorization: Bearer <supabase access toke
 | `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. `key` is explained under Sessions. |
 | `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, credits, charged_until, stats?: { accepted, reason? } }`                           |
 | `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                                   |
+| `GET /launcher/sessions`                        | `{ sessions: [{ session_id, script_id, title, url, revision, started_at, ended_at, score, reports }] }`. The last 24 hours. See Feedback.                        |
+| `POST /launcher/sessions/:id/score`             | Body `{ score }` (1 to 10). `{ score }`.                                                                                                                         |
+| `POST /launcher/sessions/:id/report`            | Body `{ description, log?, snapshot?, diagnostics? }`. `{ report_id }`.                                                                                          |
 
 ### Community scripts and share codes
 
@@ -72,17 +76,23 @@ Stats ride on the heartbeat and are optional. `experience` and `gold` are the ga
 
 `custom` holds the deltas of the script's custom trackers (`stats.limits_custom`), in tracker order, and each has per-minute limits like the rest. The whole report is checked and stored by `stats.report_session` in one transaction, so a rejected report changes nothing.
 
+### Feedback
+
+Scores and bug reports are internal: the script's author sees score aggregates and the full reports, moderators see everything, and a report can be assigned to a tester. Both are filed on a session of the caller that started or ended within the last 24 hours, which `GET /launcher/sessions` lists (newest first, at most 50) with the caller's current `score` of each script and the number of `reports` they filed on each session.
+
+`POST /launcher/sessions/:id/score` keeps one score per account per script: scoring again replaces it and records the session. `POST /launcher/sessions/:id/report` takes an optional `description` (2000 characters), the script's `log` (256 KiB, the loader sends the tail; an empty log is stored as none), a game state `snapshot` (48 KiB as JSON) and `diagnostics` (12 KiB as JSON: versions, and system info when the user allows it). The API refuses bodies over 64 KiB by `Content-Length` except on the report endpoint, which takes up to 512 KiB, Bun's limit for the whole server. The database caps every column again, keeps 5 reports an hour per account and clears the attachments after 90 days. Errors: `404` not the caller's session, `410` older than 24 hours, `413` an attachment over its limit, `429` too fast or 5 reports in the hour.
+
 ## Layout
 
-| Path                    | Contents                                                        |
-| ----------------------- | --------------------------------------------------------------- |
-| `src/index.ts`          | Server, CORS, OpenAPI docs, error shape, route autoload.        |
-| `src/routes/`           | One file per route group. The path is the URL.                  |
-| `src/lib/auth.ts`       | Token check, ban check.                                         |
-| `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, stats. |
-| `src/lib/supabase.ts`   | Admin, anon and per-user clients.                               |
-| `src/lib/validation.ts` | Runtime a report can claim.                                     |
-| `src/lib/types/`        | Generated database types and request schemas.                   |
+| Path                    | Contents                                                                  |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `src/index.ts`          | Server, CORS, OpenAPI docs, error shape, route autoload.                  |
+| `src/routes/`           | One file per route group. The path is the URL.                            |
+| `src/lib/auth.ts`       | Token check, ban check.                                                   |
+| `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, stats, feedback. |
+| `src/lib/supabase.ts`   | Admin, anon and per-user clients.                                         |
+| `src/lib/validation.ts` | Runtime a report can claim.                                               |
+| `src/lib/types/`        | Generated database types and request schemas.                             |
 
 ## Known gaps
 

@@ -1,8 +1,9 @@
 import { logError } from "./request"
-import { createUserClient, payments, scripts, stats, supabaseAdmin } from "./supabase"
+import { createUserClient, feedback, payments, scripts, stats, supabaseAdmin } from "./supabase"
 import { reportedMinutes, roleAtLeast } from "./validation"
-import type { StatsPayload } from "./types/collection"
+import type { ReportPayload, StatsPayload } from "./types/collection"
 import type { Caller } from "./auth"
+import type { Json } from "./types/supabase"
 
 /** Bump when a launcher endpoint changes in a way old launchers can't handle. `GET /launcher/me` reports it. */
 export const API_VERSION = 2
@@ -12,7 +13,7 @@ const MAX_LISTED = 200
 const ACCESS_CHECK_BATCH = 25
 
 export interface Failure {
-	code: 400 | 402 | 403 | 404 | 409 | 410 | 429 | 500 | 502
+	code: 400 | 402 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500 | 502
 	reason?: string
 	error: string
 	required?: number
@@ -494,6 +495,81 @@ async function reportStats(sessionId: string, report: StatsPayload): Promise<Sta
 		return { accepted: false, reason: logError("Failed to update the stats.", error) }
 	}
 	return { accepted: true }
+}
+
+/** A report's JSON attachments are measured as text; the database's jsonb caps (64 and 16 KiB) sit above these. */
+export const MAX_SNAPSHOT_BYTES = 48 * 1024
+export const MAX_DIAGNOSTICS_BYTES = 12 * 1024
+
+/** What the feedback functions raise, as the launcher should see it. */
+export function mapFeedbackError(error: { code?: string; message?: string }): Failure {
+	switch (error.code) {
+		case "P0002":
+			return { code: 404, error: "Session not found." }
+		case "22023":
+			return { code: 410, error: "Only sessions of the last 24 hours can be scored or reported." }
+		case "54000":
+			return { code: 429, error: "You've sent 5 bug reports in the last hour. Try again later." }
+		case "42501":
+			return { code: 403, error: "This account is banned." }
+		case "23514":
+			return { code: 422, error: error.message ?? "The report is too large." }
+		default:
+			return { code: 500, error: logError("The feedback couldn't be saved.", error) }
+	}
+}
+
+/** The caller's sessions of the last 24 hours: what the loader offers to score or report. */
+export async function recentSessions(caller: Caller) {
+	const { data, error } = await feedback().rpc("recent_sessions", { p_user: caller.id })
+	if (error)
+		return {
+			sessions: null,
+			failure: {
+				code: 500,
+				error: logError("Failed to list your sessions.", error)
+			} satisfies Failure
+		}
+	return { sessions: data, failure: null }
+}
+
+export async function scoreSession(caller: Caller, sessionId: string, score: number) {
+	const { error } = await feedback().rpc("score_session", {
+		p_user: caller.id,
+		p_session: sessionId,
+		p_score: score
+	})
+	if (error) return { result: null, failure: mapFeedbackError(error) }
+	return { result: { score }, failure: null }
+}
+
+/** The size of a JSON attachment as the text the loader sent, or null for none. */
+export function jsonBytes(value: unknown) {
+	return value === undefined ? 0 : Buffer.byteLength(JSON.stringify(value), "utf8")
+}
+
+export async function reportSession(caller: Caller, sessionId: string, report: ReportPayload) {
+	if (jsonBytes(report.snapshot) > MAX_SNAPSHOT_BYTES)
+		return {
+			result: null,
+			failure: { code: 413, error: "The snapshot is too large." } satisfies Failure
+		}
+	if (jsonBytes(report.diagnostics) > MAX_DIAGNOSTICS_BYTES)
+		return {
+			result: null,
+			failure: { code: 413, error: "The diagnostics are too large." } satisfies Failure
+		}
+
+	const { data, error } = await feedback().rpc("report_session", {
+		p_user: caller.id,
+		p_session: sessionId,
+		p_description: report.description,
+		p_log: report.log ?? "",
+		p_snapshot: (report.snapshot as Json | undefined) ?? null,
+		p_diagnostics: (report.diagnostics as Json | undefined) ?? null
+	})
+	if (error) return { result: null, failure: mapFeedbackError(error) }
+	return { result: { report_id: data }, failure: null }
 }
 
 /** Test hook. */

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createLimiter, getClientIP, logError } from "./request"
+import { bodyTooLarge, createLimiter, getClientIP, logError } from "./request"
 
 describe("createLimiter", () => {
 	test("allows up to max hits per key, then refuses", () => {
@@ -22,4 +22,18 @@ describe("getClientIP", () => {
 
 test("logError returns the message with a ref id", () => {
 	expect(logError("Nope")).toMatch(/^Nope \(ref: [0-9a-f]{8}\)$/)
+})
+
+describe("bodyTooLarge", () => {
+	test("only a report may carry a big body", () => {
+		expect(bodyTooLarge("/launcher/sessions/x/heartbeat", String(64 * 1024))).toBe(false)
+		expect(bodyTooLarge("/launcher/sessions/x/heartbeat", String(64 * 1024 + 1))).toBe(true)
+		expect(bodyTooLarge("/launcher/sessions/x/report", String(512 * 1024))).toBe(false)
+		expect(bodyTooLarge("/launcher/sessions/x/report", String(512 * 1024 + 1))).toBe(true)
+	})
+
+	test("a missing or unreadable length is left to the server", () => {
+		expect(bodyTooLarge("/launcher/me", null)).toBe(false)
+		expect(bodyTooLarge("/launcher/me", "lots")).toBe(false)
+	})
 })

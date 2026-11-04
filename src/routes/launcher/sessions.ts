@@ -1,11 +1,27 @@
 import { rateLimit, type ElysiaApp } from "$src/index"
 import { createLimiter, getClientIP } from "$lib/request"
 import { authenticate } from "$lib/auth"
-import { endSession, heartbeat, startSession } from "$lib/launcher"
-import { AuthHeaders, HeartbeatBody, StartBody, UuidParams } from "$lib/types/collection"
+import {
+	endSession,
+	heartbeat,
+	recentSessions,
+	reportSession,
+	scoreSession,
+	startSession
+} from "$lib/launcher"
+import {
+	AuthHeaders,
+	HeartbeatBody,
+	ReportBody,
+	ScoreBody,
+	StartBody,
+	UuidParams
+} from "$lib/types/collection"
 
 const startLimiter = createLimiter(10, 60 * 1000)
 const heartbeatLimiter = createLimiter(4, 60 * 1000)
+const scoreLimiter = createLimiter(20, 60 * 1000)
+const reportLimiter = createLimiter(5, 60 * 1000)
 
 export default (app: ElysiaApp) =>
 	app
@@ -118,6 +134,107 @@ Rate limit: 4 per minute per session.`,
 						401: { description: "The token is missing, invalid or expired. Refresh it and retry." },
 						404: { description: "No such session for this account." },
 						429: { description: "You are rate limited." }
+					}
+				}
+			}
+		)
+		.get(
+			"",
+			async ({ headers, status }) => {
+				const auth = await authenticate(headers.authorization)
+				if (auth.error != null) return status(auth.code, { error: auth.error })
+
+				const { sessions, failure } = await recentSessions(auth.caller)
+				if (failure) return status(failure.code, { error: failure.error })
+				return { sessions }
+			},
+			{
+				headers: AuthHeaders,
+				detail: {
+					tags: ["Feedback"],
+					summary: "Recent sessions",
+					security: [{ bearerAuth: [] }],
+					description: `The account's sessions that started or ended in the last 24 hours, newest first (at most 50): the ones that can be scored or reported. Each carries the script's title and url, the revision, \`started_at\`, \`ended_at\` (null while running), the account's current \`score\` of the script (null when unscored) and how many bug \`reports\` the account filed on that session.`,
+					responses: {
+						200: { description: "`{ sessions: [...] }`" },
+						401: { description: "The token is missing, invalid or expired. Refresh it and retry." },
+						403: { description: "The account is banned or deleted." },
+						429: { description: "You are rate limited." }
+					}
+				}
+			}
+		)
+		.post(
+			":id/score",
+			async ({ headers, params: { id }, body, status }) => {
+				const auth = await authenticate(headers.authorization)
+				if (auth.error != null) return status(auth.code, { error: auth.error })
+
+				if (!scoreLimiter(auth.caller.id)) {
+					return status(429, { error: "You're scoring too fast. Try again in a minute." })
+				}
+
+				const { result, failure } = await scoreSession(auth.caller, id, body.score)
+				if (failure) return status(failure.code, { error: failure.error })
+				return result
+			},
+			{
+				headers: AuthHeaders,
+				params: UuidParams,
+				body: ScoreBody,
+				detail: {
+					tags: ["Feedback"],
+					summary: "Score a script",
+					security: [{ bearerAuth: [] }],
+					description: `Scores the session's script from 1 to 10. An account has one score per script: scoring again replaces it and records the session it was given on. The session must be the account's own and have started or ended within the last 24 hours. Scores are internal: the author sees aggregates, moderators the rest.
+
+Rate limit: 20 per minute per user.`,
+					responses: {
+						200: { description: "`{ score }`" },
+						401: { description: "The token is missing, invalid or expired. Refresh it and retry." },
+						403: { description: "The account is banned or deleted." },
+						404: { description: "No such session for this account." },
+						410: { description: "The session is older than 24 hours." },
+						422: { description: "The score is not 1 to 10." },
+						429: { description: "You are rate limited." }
+					}
+				}
+			}
+		)
+		.post(
+			":id/report",
+			async ({ headers, params: { id }, body, status }) => {
+				const auth = await authenticate(headers.authorization)
+				if (auth.error != null) return status(auth.code, { error: auth.error })
+
+				if (!reportLimiter(auth.caller.id)) {
+					return status(429, { error: "You're sending reports too fast. Try again in a minute." })
+				}
+
+				const { result, failure } = await reportSession(auth.caller, id, body)
+				if (failure) return status(failure.code, { error: failure.error })
+				return result
+			},
+			{
+				headers: AuthHeaders,
+				params: UuidParams,
+				body: ReportBody,
+				detail: {
+					tags: ["Feedback"],
+					summary: "Report a bug",
+					security: [{ bearerAuth: [] }],
+					description: `Files a bug report on the session for the script's author, moderators and the tester they assign. \`description\` is optional (at most 2000 characters); \`log\` is the script's log (at most 256 KiB, send the tail), \`snapshot\` the game state as JSON (at most 48 KiB) and \`diagnostics\` the versions and optionally the system info (at most 12 KiB). Only this endpoint accepts bodies above 64 KiB, up to 512 KiB. The session must be the account's own and have started or ended within the last 24 hours. The attachments are deleted after 90 days.
+
+Rate limit: 5 per minute per user, and the database accepts 5 reports an hour per account.`,
+					responses: {
+						200: { description: "`{ report_id }`" },
+						401: { description: "The token is missing, invalid or expired. Refresh it and retry." },
+						403: { description: "The account is banned or deleted." },
+						404: { description: "No such session for this account." },
+						410: { description: "The session is older than 24 hours." },
+						413: { description: "An attachment is over its size limit." },
+						422: { description: "The body is invalid or too large for the database." },
+						429: { description: "You are rate limited, or sent 5 reports in the last hour." }
 					}
 				}
 			}

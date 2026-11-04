@@ -1,7 +1,7 @@
 import { Elysia } from "elysia"
 import { cors } from "@elysiajs/cors"
 import { serverTiming } from "@elysiajs/server-timing"
-import { getClientIP } from "$lib/request"
+import { bodyTooLarge, getClientIP, REPORT_BODY_BYTES } from "$lib/request"
 import openapi from "@elysiajs/openapi"
 import { autoload } from "elysia-autoload"
 export { t } from "elysia"
@@ -21,6 +21,14 @@ app.onAfterResponse((response) => {
 	const timestamp = new Date().toISOString().replace("T", " ").replace("Z", "")
 
 	console.log(`[${timestamp}]: [${set.status}] ${userAgent} ${ip} - ${request.method} ${path}`)
+})
+
+// Bug reports carry a script log, everything else stays small; Bun's limit is per server, so the rest is checked here.
+app.onRequest(({ request, set }) => {
+	if (bodyTooLarge(new URL(request.url).pathname, request.headers.get("content-length"))) {
+		set.status = 413
+		return { error: "Request body too large." }
+	}
 })
 
 // Every error is JSON `{ error }` so the launcher can read it.
@@ -85,7 +93,8 @@ Requests with missing or invalid headers, params or body return \`422\`.`
 				{ name: "General", description: "Public API information" },
 				{ name: "Account", description: "The signed in account" },
 				{ name: "Scripts", description: "The script store" },
-				{ name: "Sessions", description: "Running scripts: start, heartbeat, end, stats" }
+				{ name: "Sessions", description: "Running scripts: start, heartbeat, end, stats" },
+				{ name: "Feedback", description: "Internal script scores and bug reports" }
 			],
 			components: {
 				securitySchemes: {
@@ -113,7 +122,7 @@ app.use(serverTiming())
 app.listen({
 	hostname: process.env.HOST ?? "0.0.0.0",
 	port: process.env.PORT ?? 3000,
-	maxRequestBodySize: 64 * 1024
+	maxRequestBodySize: REPORT_BODY_BYTES
 })
 
 export type ElysiaApp = typeof app

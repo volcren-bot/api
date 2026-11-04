@@ -42,3 +42,31 @@ export const RedeemBody = t.Object({
 export const StartBody = t.Object({
 	script_id: t.String({ format: "uuid", error: "script_id must be a valid UUID." })
 })
+
+export const ScoreBody = t.Object({
+	score: t.Integer({ minimum: 1, maximum: 10, description: "1 (worst) to 10 (best)" })
+})
+
+export const ReportBody = t.Object({
+	description: t.String({
+		maxLength: 2000,
+		default: "",
+		description: "What went wrong, optional, at most 2000 characters"
+	}),
+	log: t.Optional(
+		t.String({ maxLength: 262144, description: "The script's log, at most 256 KiB; keep the tail" })
+	),
+	snapshot: t.Optional(
+		t.Record(t.String(), t.Unknown(), {
+			description: "Game state when the bug happened, at most 48 KiB as JSON"
+		})
+	),
+	diagnostics: t.Optional(
+		t.Record(t.String(), t.Unknown(), {
+			description:
+				"Loader, lib, agent and client versions, and optionally OS and hardware, at most 12 KiB as JSON"
+		})
+	)
+})
+
+export type ReportPayload = Static<typeof ReportBody>

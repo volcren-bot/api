@@ -7,6 +7,190 @@ export type Json =
   | Json[]
 
 export type Database = {
+  feedback: {
+    Tables: {
+      reports: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          description: string
+          diagnostics: Json | null
+          id: string
+          log: string | null
+          revision: number
+          script_id: string
+          session_id: string
+          snapshot: Json | null
+          status: Database["feedback"]["Enums"]["report_status"]
+          updated_at: string
+          user_id: string
+          can_manage_report: boolean | null
+          can_view_report: boolean | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          description?: string
+          diagnostics?: Json | null
+          id?: string
+          log?: string | null
+          revision: number
+          script_id: string
+          session_id: string
+          snapshot?: Json | null
+          status?: Database["feedback"]["Enums"]["report_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          description?: string
+          diagnostics?: Json | null
+          id?: string
+          log?: string | null
+          revision?: number
+          script_id?: string
+          session_id?: string
+          snapshot?: Json | null
+          status?: Database["feedback"]["Enums"]["report_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      scores: {
+        Row: {
+          created_at: string
+          revision: number
+          score: number
+          script_id: string
+          session_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          revision: number
+          score: number
+          script_id: string
+          session_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          revision?: number
+          score?: number
+          script_id?: string
+          session_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      can_manage_report: {
+        Args: { r: Database["feedback"]["Tables"]["reports"]["Row"] }
+        Returns: boolean
+      }
+      can_view_report: {
+        Args: { r: Database["feedback"]["Tables"]["reports"]["Row"] }
+        Returns: boolean
+      }
+      clear_old_attachments: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      list_reports: {
+        Args: { p_script?: string }
+        Returns: {
+          assigned_to: string
+          assignee: string
+          created_at: string
+          description: string
+          has_diagnostics: boolean
+          has_log: boolean
+          has_snapshot: boolean
+          id: string
+          revision: number
+          script_id: string
+          script_title: string
+          script_url: string
+          session_id: string
+          status: Database["feedback"]["Enums"]["report_status"]
+          updated_at: string
+          user_id: string
+          username: string
+        }[]
+      }
+      list_testers: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          role: Database["profiles"]["Enums"]["roles"]
+          username: string
+        }[]
+      }
+      recent_session: {
+        Args: { p_session: string; p_user: string }
+        Returns: Database["payments"]["Tables"]["sessions"]["Row"]
+        SetofOptions: {
+          from: "*"
+          to: "sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      recent_sessions: {
+        Args: { p_user: string }
+        Returns: {
+          ended_at: string
+          reports: number
+          revision: number
+          score: number
+          script_id: string
+          session_id: string
+          started_at: string
+          title: string
+          url: string
+        }[]
+      }
+      report_session: {
+        Args: {
+          p_description: string
+          p_diagnostics: Json
+          p_log: string
+          p_session: string
+          p_snapshot: Json
+          p_user: string
+        }
+        Returns: string
+      }
+      score_session: {
+        Args: { p_score: number; p_session: string; p_user: string }
+        Returns: undefined
+      }
+      score_summary: {
+        Args: { p_script: string }
+        Returns: {
+          average: number
+          count: number
+          histogram: number[]
+        }[]
+      }
+    }
+    Enums: {
+      report_status: "open" | "in_progress" | "resolved" | "rejected"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -41,7 +225,6 @@ export type Database = {
           user_id: string
           version: number
         }
-        ComputedFields: never
         Insert: {
           accepted_at?: string
           kind: Database["info"]["Enums"]["kind"]
@@ -58,9 +241,10 @@ export type Database = {
           {
             foreignKeyName: "acceptances_document_fkey"
             columns: ["kind", "version"]
+            isOneToOne: false
             referencedRelation: "documents"
             referencedColumns: ["kind", "version"]
-          },
+          }
         ]
       }
       documents: {
@@ -70,7 +254,6 @@ export type Database = {
           kind: Database["info"]["Enums"]["kind"]
           version: number
         }
-        ComputedFields: never
         Insert: {
           content: string
           created_at?: string
@@ -111,7 +294,6 @@ export type Database = {
           updated_at: string
           user_id: string
         }
-        ComputedFields: never
         Insert: {
           credits?: number
           earnings?: number
@@ -133,7 +315,6 @@ export type Database = {
           platform_fee_bps: number
           session_timeout_minutes: number
         }
-        ComputedFields: never
         Insert: {
           id?: boolean
           min_balance_minutes?: number
@@ -163,7 +344,6 @@ export type Database = {
           session_id: string | null
           user_id: string
         }
-        ComputedFields: never
         Insert: {
           amount: number
           balance_after: number
@@ -196,9 +376,10 @@ export type Database = {
           {
             foreignKeyName: "credits_ledger_payment_id_fkey"
             columns: ["payment_id"]
+            isOneToOne: false
             referencedRelation: "payments"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       earnings_ledger: {
@@ -214,7 +395,6 @@ export type Database = {
           session_id: string | null
           user_id: string
         }
-        ComputedFields: never
         Insert: {
           amount: number
           balance_after: number
@@ -255,7 +435,6 @@ export type Database = {
           status: Database["payments"]["Enums"]["payment_status"]
           user_id: string
         }
-        ComputedFields: never
         Insert: {
           amount: number
           bonus?: number
@@ -299,7 +478,6 @@ export type Database = {
           unpaid: number
           user_id: string
         }
-        ComputedFields: never
         Insert: {
           author_id: string
           charged_until?: string
@@ -420,7 +598,6 @@ export type Database = {
           reason: string
           user_id: string
         }
-        ComputedFields: never
         Insert: {
           admin_id: string
           banned: boolean
@@ -446,7 +623,6 @@ export type Database = {
           id: number
           user_id: string
         }
-        ComputedFields: never
         Insert: {
           admin_id: string
           created_at?: string
@@ -470,7 +646,6 @@ export type Database = {
           role: Database["profiles"]["Enums"]["roles"]
           username: string
         }
-        ComputedFields: never
         Insert: {
           avatar?: string
           banned_at?: string | null
@@ -583,7 +758,6 @@ export type Database = {
           name: string
           scripts: string[]
         }
-        ComputedFields: never
         Insert: {
           author?: string
           id?: string
@@ -608,7 +782,6 @@ export type Database = {
           redeem_max_failures: number
           redeem_window_minutes: number
         }
-        ComputedFields: never
         Insert: {
           id?: boolean
           max_community_bytes?: number
@@ -639,7 +812,6 @@ export type Database = {
           script_id: string
           token_hash: string
         }
-        ComputedFields: never
         Insert: {
           created_at?: string
           created_by?: string
@@ -662,9 +834,10 @@ export type Database = {
           {
             foreignKeyName: "deploy_tokens_script_id_fkey"
             columns: ["script_id"]
+            isOneToOne: false
             referencedRelation: "scripts"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       grants: {
@@ -674,7 +847,6 @@ export type Database = {
           script_id: string
           user_id: string
         }
-        ComputedFields: never
         Insert: {
           code_id: string
           granted_at?: string
@@ -691,15 +863,17 @@ export type Database = {
           {
             foreignKeyName: "grants_code_id_fkey"
             columns: ["code_id"]
+            isOneToOne: false
             referencedRelation: "share_codes"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "grants_script_id_fkey"
             columns: ["script_id"]
+            isOneToOne: false
             referencedRelation: "scripts"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       metadata: {
@@ -710,7 +884,6 @@ export type Database = {
           stage: Database["scripts"]["Enums"]["stage"]
           type: Database["scripts"]["Enums"]["type"]
         }
-        ComputedFields: never
         Insert: {
           categories?: Database["scripts"]["Enums"]["category"][]
           id: string
@@ -729,9 +902,10 @@ export type Database = {
           {
             foreignKeyName: "metadata_id_fkey"
             columns: ["id"]
+            isOneToOne: true
             referencedRelation: "scripts"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       protected: {
@@ -743,7 +917,6 @@ export type Database = {
           revision: number
           updated_at: string
         }
-        ComputedFields: never
         Insert: {
           author?: string
           created_at?: string
@@ -764,9 +937,10 @@ export type Database = {
           {
             foreignKeyName: "protected_id_fkey"
             columns: ["id"]
+            isOneToOne: true
             referencedRelation: "scripts"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       redeem_attempts: {
@@ -774,7 +948,6 @@ export type Database = {
           attempted_at: string
           user_id: string
         }
-        ComputedFields: never
         Insert: {
           attempted_at?: string
           user_id: string
@@ -797,7 +970,6 @@ export type Database = {
           is_community: boolean | null
           is_granted: boolean | null
         }
-        ComputedFields: "author_banned" | "is_community" | "is_granted"
         Insert: {
           content: string
           description: string
@@ -827,7 +999,6 @@ export type Database = {
           redeemed_by: string | null
           script_id: string
         }
-        ComputedFields: never
         Insert: {
           code_hash: string
           created_at?: string
@@ -852,9 +1023,10 @@ export type Database = {
           {
             foreignKeyName: "share_codes_script_id_fkey"
             columns: ["script_id"]
+            isOneToOne: false
             referencedRelation: "scripts"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       slugs: {
@@ -862,7 +1034,6 @@ export type Database = {
           id: string
           slug: string
         }
-        ComputedFields: never
         Insert: {
           id: string
           slug: string
@@ -875,9 +1046,10 @@ export type Database = {
           {
             foreignKeyName: "slugs_id_fkey"
             columns: ["id"]
+            isOneToOne: false
             referencedRelation: "scripts"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       version_keys: {
@@ -887,7 +1059,6 @@ export type Database = {
           key: string
           revision: number
         }
-        ComputedFields: never
         Insert: {
           created_at?: string
           id: string
@@ -900,7 +1071,15 @@ export type Database = {
           key?: string
           revision?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "version_keys_version_fkey"
+            columns: ["id", "revision"]
+            isOneToOne: true
+            referencedRelation: "versions"
+            referencedColumns: ["id", "revision"]
+          }
+        ]
       }
       versions: {
         Row: {
@@ -913,10 +1092,9 @@ export type Database = {
           sizes: number[]
           status: Database["scripts"]["Enums"]["version_status"]
         }
-        ComputedFields: never
         Insert: {
           created_at?: string
-          entry?: string
+          entry: string
           files: string[]
           id: string
           published_at?: string | null
@@ -938,9 +1116,10 @@ export type Database = {
           {
             foreignKeyName: "versions_id_fkey"
             columns: ["id"]
+            isOneToOne: false
             referencedRelation: "scripts"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
     }
@@ -1051,10 +1230,6 @@ export type Database = {
         Args: { revision: number; script_id: string }
         Returns: undefined
       }
-      set_version_key: {
-        Args: { key: string; revision: number; script_id: string }
-        Returns: undefined
-      }
       redeem_share_code: {
         Args: { p_code: string }
         Returns: {
@@ -1064,6 +1239,10 @@ export type Database = {
         }[]
       }
       safe_uuid: { Args: { value: string }; Returns: string }
+      set_version_key: {
+        Args: { key: string; revision: number; script_id: string }
+        Returns: undefined
+      }
       storage_used: {
         Args: { author_id: string; reserve_pending?: boolean }
         Returns: number
@@ -1118,7 +1297,6 @@ export type Database = {
           xp_max: number
           xp_min: number
         }
-        ComputedFields: never
         Insert: {
           gp_max?: number
           gp_min?: number
@@ -1142,7 +1320,6 @@ export type Database = {
           minima: number[]
           trackers: string[]
         }
-        ComputedFields: never
         Insert: {
           id: string
           maxima?: number[]
@@ -1165,7 +1342,6 @@ export type Database = {
           levels: number
           runtime: number
         }
-        ComputedFields: never
         Insert: {
           experience?: number
           gold?: number
@@ -1190,7 +1366,6 @@ export type Database = {
           levels: number
           runtime: number
         }
-        ComputedFields: never
         Insert: {
           experience?: number
           gold?: number
@@ -1212,7 +1387,6 @@ export type Database = {
           id: string
           values: number[]
         }
-        ComputedFields: never
         Insert: {
           id: string
           values?: number[]
@@ -1229,7 +1403,6 @@ export type Database = {
           id: string
           total: number | null
         }
-        ComputedFields: never
         Insert: {
           downloads?: string[]
           id: string
@@ -1249,7 +1422,6 @@ export type Database = {
           id: string
           total: number | null
         }
-        ComputedFields: never
         Insert: {
           date?: string
           downloads?: string[]
@@ -1273,7 +1445,6 @@ export type Database = {
           levels: number | null
           runtime: number | null
         }
-        ComputedFields: never
         Relationships: []
       }
     }
@@ -1343,7 +1514,6 @@ export type Database = {
           updated_at: string | null
           versioning_status: string
         }
-        ComputedFields: never
         Insert: {
           allowed_mime_types?: string[] | null
           avif_autodetection?: boolean | null
@@ -1388,7 +1558,6 @@ export type Database = {
           type: Database["storage"]["Enums"]["buckettype"]
           updated_at: string
         }
-        ComputedFields: never
         Insert: {
           created_at?: string
           deleted_at?: string | null
@@ -1416,7 +1585,6 @@ export type Database = {
           type: Database["storage"]["Enums"]["buckettype"]
           updated_at: string
         }
-        ComputedFields: never
         Insert: {
           created_at?: string
           id: string
@@ -1441,7 +1609,6 @@ export type Database = {
           name: string
           updated_at: string
         }
-        ComputedFields: never
         Insert: {
           bucket_name: string
           catalog_id: string
@@ -1464,9 +1631,10 @@ export type Database = {
           {
             foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
             columns: ["catalog_id"]
+            isOneToOne: false
             referencedRelation: "buckets_analytics"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       iceberg_tables: {
@@ -1483,7 +1651,6 @@ export type Database = {
           shard_key: string | null
           updated_at: string
         }
-        ComputedFields: never
         Insert: {
           bucket_name: string
           catalog_id: string
@@ -1514,15 +1681,17 @@ export type Database = {
           {
             foreignKeyName: "iceberg_tables_catalog_id_fkey"
             columns: ["catalog_id"]
+            isOneToOne: false
             referencedRelation: "buckets_analytics"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "iceberg_tables_namespace_id_fkey"
             columns: ["namespace_id"]
+            isOneToOne: false
             referencedRelation: "iceberg_namespaces"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       migrations: {
@@ -1532,7 +1701,6 @@ export type Database = {
           id: number
           name: string
         }
-        ComputedFields: never
         Insert: {
           executed_at?: string | null
           hash: string
@@ -1565,7 +1733,6 @@ export type Database = {
           user_metadata: Json | null
           version: string | null
         }
-        ComputedFields: never
         Insert: {
           archived_at?: string | null
           bucket_id?: string | null
@@ -1604,9 +1771,10 @@ export type Database = {
           {
             foreignKeyName: "objects_bucketId_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       s3_multipart_uploads: {
@@ -1622,7 +1790,6 @@ export type Database = {
           user_metadata: Json | null
           version: string
         }
-        ComputedFields: never
         Insert: {
           bucket_id: string
           created_at?: string
@@ -1651,9 +1818,10 @@ export type Database = {
           {
             foreignKeyName: "s3_multipart_uploads_bucket_id_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       s3_multipart_uploads_parts: {
@@ -1669,7 +1837,6 @@ export type Database = {
           upload_id: string
           version: string
         }
-        ComputedFields: never
         Insert: {
           bucket_id: string
           created_at?: string
@@ -1698,15 +1865,17 @@ export type Database = {
           {
             foreignKeyName: "s3_multipart_uploads_parts_bucket_id_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "s3_multipart_uploads_parts_upload_id_fkey"
             columns: ["upload_id"]
+            isOneToOne: false
             referencedRelation: "s3_multipart_uploads"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       vector_indexes: {
@@ -1721,7 +1890,6 @@ export type Database = {
           name: string
           updated_at: string
         }
-        ComputedFields: never
         Insert: {
           bucket_id: string
           created_at?: string
@@ -1748,9 +1916,10 @@ export type Database = {
           {
             foreignKeyName: "vector_indexes_bucket_id_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets_vectors"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
     }
@@ -1935,7 +2104,7 @@ export type Tables<
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never) = never
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1957,13 +2126,12 @@ export type Tables<
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never) = never
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1982,13 +2150,12 @@ export type TablesInsert<
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never) = never
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2007,13 +2174,12 @@ export type TablesUpdate<
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
   EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never) = never
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2030,7 +2196,7 @@ export type CompositeTypes<
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never) = never
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2040,13 +2206,18 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  feedback: {
+    Enums: {
+      report_status: ["open", "in_progress", "resolved", "rejected"]
+    }
+  },
   graphql_public: {
-    Enums: {},
+    Enums: {}
   },
   info: {
     Enums: {
-      kind: ["privacy_policy", "user_tos", "scripter_tos", "community_tos"],
-    },
+      kind: ["privacy_policy", "user_tos", "scripter_tos", "community_tos"]
+    }
   },
   payments: {
     Enums: {
@@ -2054,8 +2225,8 @@ export const Constants = {
       earning_kind: ["sale", "transfer", "withdrawal", "adjustment"],
       payment_status: ["pending", "paid", "expired", "invalid"],
       provider: ["bitcart", "stripe", "molly"],
-      session_end: ["stopped", "timeout", "insufficient_credits"],
-    },
+      session_end: ["stopped", "timeout", "insufficient_credits"]
+    }
   },
   profiles: {
     Enums: {
@@ -2065,12 +2236,12 @@ export const Constants = {
         "tester",
         "scripter",
         "moderator",
-        "administrator",
-      ],
-    },
+        "administrator"
+      ]
+    }
   },
   public: {
-    Enums: {},
+    Enums: {}
   },
   scripts: {
     Enums: {
@@ -2098,19 +2269,19 @@ export const Constants = {
         "slayer",
         "thieving",
         "runecrafting",
-        "sailing",
+        "sailing"
       ],
       stage: ["prototype", "alpha", "beta", "stable", "archived"],
       type: ["premium", "free"],
-      version_status: ["pending", "live", "discarded"],
-    },
+      version_status: ["pending", "live", "discarded"]
+    }
   },
   stats: {
-    Enums: {},
+    Enums: {}
   },
   storage: {
     Enums: {
-      buckettype: ["STANDARD", "ANALYTICS", "VECTOR"],
-    },
-  },
+      buckettype: ["STANDARD", "ANALYTICS", "VECTOR"]
+    }
+  }
 } as const
