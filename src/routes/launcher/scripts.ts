@@ -1,7 +1,7 @@
 import { rateLimit, t, type ElysiaApp } from "$src/index"
 import { createLimiter, getClientIP } from "$lib/request"
 import { authenticate } from "$lib/auth"
-import { listScripts, redeemCode, removeGrant } from "$lib/launcher"
+import { listScripts, quoteScript, redeemCode, removeGrant } from "$lib/launcher"
 import { normalizeShareCode } from "$lib/validation"
 import { AuthHeaders, RedeemBody, UuidParams } from "$lib/types/collection"
 
@@ -66,6 +66,35 @@ export default (app: ElysiaApp) =>
 							description:
 								"The account is banned or deleted, or asked for `community` without being a tester."
 						},
+						429: { description: "You are rate limited." }
+					}
+				}
+			}
+		)
+		.get(
+			":id/quote",
+			async ({ headers, params: { id }, status }) => {
+				const auth = await authenticate(headers.authorization)
+				if (auth.error != null) return status(auth.code, { error: auth.error })
+
+				const { quote, failure } = await quoteScript(auth.caller, id)
+				if (failure) return status(failure.code, { error: failure.error })
+				return quote
+			},
+			{
+				headers: AuthHeaders,
+				params: UuidParams,
+				detail: {
+					tags: ["Scripts"],
+					summary: "What starting a script would cost",
+					security: [{ bearerAuth: [] }],
+					description:
+						"What a session of this script would cost the account if it started now: `price` in credits per minute after the account's exemptions (0 for the author, a grant and tester+, where the listed price doesn't apply), the `rank` it would take among the account's open sessions, the extra-session `fee` at that rank in credits per 30 days, and the balance `required` to start. Rate limit: 30 requests per minute per IP.",
+					responses: {
+						200: { description: "`{ price, rank, fee, required }`" },
+						401: { description: "The token is missing, invalid or expired. Refresh it and retry." },
+						403: { description: "The account is banned or deleted." },
+						404: { description: "No such script, or the account can't see it." },
 						429: { description: "You are rate limited." }
 					}
 				}

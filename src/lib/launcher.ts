@@ -371,6 +371,41 @@ async function quote(userId: string, scriptId: string) {
 	return data?.[0]
 }
 
+/** `quote` for the launcher, which may only ask about scripts the account can see. */
+export async function quoteScript(caller: Caller, scriptId: string) {
+	const { data: visible, error: viewErr } = await scripts().rpc("can_view", {
+		viewer_id: caller.id,
+		script_id: scriptId
+	})
+	if (viewErr)
+		return {
+			quote: null,
+			failure: {
+				code: 500,
+				error: logError("Failed to check the script.", viewErr)
+			} satisfies Failure
+		}
+	if (visible !== true)
+		return { quote: null, failure: { code: 404, error: "Script not found." } satisfies Failure }
+
+	const { data, error } = await payments().rpc("session_quote", {
+		p_user: caller.id,
+		p_script: scriptId
+	})
+	if (error)
+		return {
+			quote: null,
+			failure: {
+				code: 500,
+				error: logError("Failed to quote the script.", error)
+			} satisfies Failure
+		}
+	const quoted = data?.[0]
+	if (!quoted)
+		return { quote: null, failure: { code: 404, error: "Script not found." } satisfies Failure }
+	return { quote: quoted, failure: null }
+}
+
 /** The rank a running session holds now and the fee it accrues at it, in credits per 30 days. */
 async function sessionFee(userId: string, sessionId: string) {
 	const { data: rank } = await payments().rpc("session_rank", { p_session: sessionId })
