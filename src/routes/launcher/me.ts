@@ -33,7 +33,7 @@ export default (app: ElysiaApp) =>
 					summary: "Current account",
 					security: [{ bearerAuth: [] }],
 					description:
-						"Username, avatar, role and credit balance of the signed in account, the minutes of balance a premium script needs to start, and the API version so old launchers can be told to update. Rate limit: 60 requests per minute per IP.",
+						"Username, avatar, role and credit balance of the signed in account, the minutes of balance a premium script needs to start, how many sessions it has open, the fee an extra session costs it (credits per 30 days of running, 0 for tester+) and the minutes in such a month, and the API version so old launchers can be told to update. Rate limit: 60 requests per minute per IP.",
 					responses: {
 						200: { description: "The account" },
 						401: { description: "The token is missing, invalid or expired. Refresh it and retry." },

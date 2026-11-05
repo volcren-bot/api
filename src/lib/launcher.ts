@@ -19,7 +19,8 @@ export interface Failure {
 	required?: number
 }
 
-export const maxOpenSessions = () => Number(process.env.MAX_OPEN_SESSIONS) || 5
+/** The unit `extra_session_fee` is quoted in: credits per 30 days of running (payments.minutes_per_month). */
+export const MINUTES_PER_MONTH = 30 * 24 * 60
 
 const pad = (revision: number) => String(revision).padStart(9, "0")
 
@@ -29,7 +30,7 @@ export const revisionFolder = (scriptId: string, revision: number) => `${scriptI
 async function getConfig() {
 	const { data, error } = await payments()
 		.from("config")
-		.select("min_balance_minutes, session_timeout_minutes")
+		.select("min_balance_minutes, session_timeout_minutes, extra_session_fee")
 		.single()
 	if (error) return { config: null, error: logError("Failed to load the billing settings.", error) }
 	return { config: data, error: null }
@@ -44,8 +45,21 @@ async function getCredits(userId: string) {
 	return data?.credits ?? 0
 }
 
+async function openSessions(userId: string) {
+	const { count } = await payments()
+		.from("sessions")
+		.select("id", { count: "exact", head: true })
+		.eq("user_id", userId)
+		.is("ended_at", null)
+	return count ?? 0
+}
+
 export async function getMe(caller: Caller) {
-	const [{ config, error }, credits] = await Promise.all([getConfig(), getCredits(caller.id)])
+	const [{ config, error }, credits, open] = await Promise.all([
+		getConfig(),
+		getCredits(caller.id),
+		openSessions(caller.id)
+	])
 	if (error != null || !config)
 		return { me: null, failure: { code: 500, error: error ?? "" } satisfies Failure }
 	return {
@@ -55,6 +69,10 @@ export async function getMe(caller: Caller) {
 			role: caller.role,
 			credits,
 			min_balance_minutes: config.min_balance_minutes,
+			open_sessions: open,
+			// Tester+ pay no fee; the database decides, this is what it would charge everyone else
+			extra_session_fee: roleAtLeast(caller.role, "tester") ? 0 : config.extra_session_fee,
+			minutes_per_month: MINUTES_PER_MONTH,
 			api_version: API_VERSION
 		},
 		failure: null
@@ -252,29 +270,6 @@ export async function removeGrant(caller: Caller, scriptId: string) {
 }
 
 export async function startSession(caller: Caller, scriptId: string) {
-	const { count, error: openErr } = await payments()
-		.from("sessions")
-		.select("id", { count: "exact", head: true })
-		.eq("user_id", caller.id)
-		.is("ended_at", null)
-	if (openErr)
-		return {
-			session: null,
-			failure: {
-				code: 500,
-				error: logError("Failed to check your open sessions.", openErr)
-			} satisfies Failure
-		}
-	if ((count ?? 0) >= maxOpenSessions()) {
-		return {
-			session: null,
-			failure: {
-				code: 409,
-				error: `You already have ${maxOpenSessions()} sessions running. Stop one first.`
-			} satisfies Failure
-		}
-	}
-
 	const { data, error } = await payments().rpc("start_session", {
 		p_user: caller.id,
 		p_script: scriptId
@@ -284,7 +279,7 @@ export async function startSession(caller: Caller, scriptId: string) {
 		// `can_access` refuses on a short balance too, which arrives as a 403.
 		if (failure.code === 403 && (await lacksCredits(caller.id, scriptId)))
 			failure = mapStartError({ code: "23514" })
-		if (failure.code === 402) failure.required = await requiredBalance(scriptId)
+		if (failure.code === 402) failure.required = (await quote(caller.id, scriptId))?.required
 		return { session: null, failure }
 	}
 	const started = data[0]
@@ -339,6 +334,8 @@ export async function startSession(caller: Caller, scriptId: string) {
 			session_id: started.session_id,
 			revision: started.revision,
 			price: price?.price ?? 0,
+			rank: started.rank,
+			fee: started.fee,
 			entry: started.entry,
 			files: started.files.map((name, i) => ({ name, url: signed[i].signedUrl })),
 			key: keyRow ? hexKey(keyRow.key) : null,
@@ -364,15 +361,21 @@ async function lacksCredits(userId: string, scriptId: string) {
 		script_id: scriptId
 	})
 	if (visible !== true) return false
-	const required = await requiredBalance(scriptId)
-	return required !== undefined && (await getCredits(userId)) < required
+	const required = (await quote(userId, scriptId))?.required
+	return required !== undefined && required > 0 && (await getCredits(userId)) < required
 }
 
-async function requiredBalance(scriptId: string) {
-	const { data } = await scripts().from("metadata").select("price").eq("id", scriptId).single()
-	if (!data || data.price <= 0) return undefined
-	const { data: required } = await payments().rpc("required_balance", { p_price: data.price })
-	return required ?? undefined
+/** What starting the script would cost the user now: price, the rank the session would take, its fee and the balance needed. */
+async function quote(userId: string, scriptId: string) {
+	const { data } = await payments().rpc("session_quote", { p_user: userId, p_script: scriptId })
+	return data?.[0]
+}
+
+/** The rank a running session holds now and the fee it accrues at it, in credits per 30 days. */
+async function sessionFee(userId: string, sessionId: string) {
+	const { data: rank } = await payments().rpc("session_rank", { p_session: sessionId })
+	const { data: fee } = await payments().rpc("session_fee", { p_user: userId, p_rank: rank ?? 0 })
+	return { rank: rank ?? 0, fee: fee ?? 0 }
 }
 
 /** When each open session last reported, to cap the runtime a report can claim. */
@@ -425,9 +428,14 @@ export async function heartbeat(
 			} satisfies Failure
 		}
 
-	const [{ data: after }, credits] = await Promise.all([
-		payments().from("sessions").select("end_reason, charged_until").eq("id", sessionId).single(),
-		getCredits(caller.id)
+	const [{ data: after }, credits, { rank, fee }] = await Promise.all([
+		payments()
+			.from("sessions")
+			.select("end_reason, charged_until, fee_charged")
+			.eq("id", sessionId)
+			.single(),
+		getCredits(caller.id),
+		sessionFee(caller.id, sessionId)
 	])
 
 	if (!alive) {
@@ -445,7 +453,15 @@ export async function heartbeat(
 
 	const reported = report ? await reportStats(sessionId, report) : undefined
 	return {
-		result: { alive: true, credits, charged_until: after?.charged_until ?? null, stats: reported },
+		result: {
+			alive: true,
+			credits,
+			charged_until: after?.charged_until ?? null,
+			rank,
+			fee,
+			fee_charged: after?.fee_charged ?? 0,
+			stats: reported
+		},
 		failure: null
 	}
 }

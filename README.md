@@ -21,7 +21,7 @@ bun run dev              # http://localhost:3000
 | `bun run lint`     | Prettier and ESLint.                           |
 | `bun run gentypes` | Regenerate `src/lib/types/supabase.ts`.        |
 
-Optional: `HOST`, `PORT`, and `MAX_OPEN_SESSIONS` (sessions one user can have open at once, default 5).
+Optional: `HOST` and `PORT`.
 
 ## Contract
 
@@ -33,26 +33,26 @@ Every endpoint except `GET /` takes `Authorization: Bearer <supabase access toke
 | 402    | Not enough credits to start. Body has `required`.                                       |
 | 403    | Banned or deleted account, or no access to the script.                                  |
 | 404    | No such session for this account (other people's sessions look the same).               |
-| 409    | No live revision, too many open sessions, or a share code that can't be used.           |
+| 409    | No live revision, or a share code that can't be used.                                   |
 | 410    | The share code has expired, or the session is older than 24 hours.                      |
 | 413    | The body is over 64 KiB (512 KiB for a bug report), or an attachment is over its limit. |
 | 422    | Missing or invalid header, param or body.                                               |
 | 429    | Rate limited. `Retry-After` is in seconds.                                              |
 | 502    | The script files couldn't be prepared. The session was ended, not billed.               |
 
-| Endpoint                                        | Returns                                                                                                                                                          |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /`                                         | `{ api_version }`. Public.                                                                                                                                       |
-| `GET /launcher/me`                              | `{ username, avatar_url, role, credits, min_balance_minutes, api_version }`                                                                                      |
-| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, cover_url, can_access, community, granted, author, online }] }`            |
-| `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                                       |
-| `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                                     |
-| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. `key` is explained under Sessions. |
-| `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, credits, charged_until, stats?: { accepted, reason? } }`                           |
-| `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                                   |
-| `GET /launcher/sessions`                        | `{ sessions: [{ session_id, script_id, title, url, revision, started_at, ended_at, score, reports }] }`. The last 24 hours. See Feedback.                        |
-| `POST /launcher/sessions/:id/score`             | Body `{ score }` (1 to 10). `{ score }`.                                                                                                                         |
-| `POST /launcher/sessions/:id/report`            | Body `{ description, log?, snapshot?, diagnostics? }`. `{ report_id }`.                                                                                          |
+| Endpoint                                        | Returns                                                                                                                                                        |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /`                                         | `{ api_version }`. Public.                                                                                                                                     |
+| `GET /launcher/me`                              | `{ username, avatar_url, role, credits, min_balance_minutes, open_sessions, extra_session_fee, minutes_per_month, api_version }`                               |
+| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, cover_url, can_access, community, granted, author, online }] }`          |
+| `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                                     |
+| `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                                   |
+| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, rank, fee, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. See Sessions.         |
+| `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, credits, charged_until, rank, fee, fee_charged, stats?: { accepted, reason? } }` |
+| `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                                 |
+| `GET /launcher/sessions`                        | `{ sessions: [{ session_id, script_id, title, url, revision, started_at, ended_at, score, reports }] }`. The last 24 hours. See Feedback.                      |
+| `POST /launcher/sessions/:id/score`             | Body `{ score }` (1 to 10). `{ score }`.                                                                                                                       |
+| `POST /launcher/sessions/:id/report`            | Body `{ description, log?, snapshot?, diagnostics? }`. `{ report_id }`.                                                                                        |
 
 ### Community scripts and share codes
 
@@ -69,6 +69,8 @@ Community scripts are never premium and run for their author, tester+ and people
 Script files are stored encrypted (AES-256-GCM, see the database notes). `key` is the revision's key as 64 hex digits, or `null` for a revision published before encryption, whose files are plain. Each file is `nonce (12 bytes) || ciphertext || tag`, authenticated with `volcren:<script id>/<9-digit revision>/<file name>`. The key is only given to a started session and never logged.
 
 `price` is credits per minute, fixed when the session starts. Send a heartbeat every `heartbeat_seconds`; the database ends a session after 5 minutes without one. When `alive` is false, `reason` is `insufficient_credits`, `timeout` or `stopped`, and the launcher must stop the script.
+
+An account can have any number of sessions open, but every one past the oldest pays an **extra-session fee** on top of its price: `extra_session_fee` credits per 30 days of running (`minutes_per_month`, 43200), charged a whole credit at a time as it accrues. `rank` is a session's place among the account's open sessions by start time, 0 for the oldest, and is recomputed every minute: when the oldest ends, the next one stops paying. Tester+ pay no fee, and `GET /launcher/me` reports `extra_session_fee: 0` for them. The start and heartbeat answers carry the session's `rank` and `fee`; a launcher about to start a script computes the instance's monthly cost as `price * minutes_per_month + fee`. The balance needed to start or keep running is `min_balance_minutes` of the price plus the fee for that time, so an extra instance of a free script needs a credit. A `402` on start carries the `required` balance.
 
 ### Stats
 
