@@ -19,23 +19,20 @@ const supabaseAnon = createClient<Database>(
 	authOptions
 )
 
-/** A client that acts as the user, so row level security decides what they can see. */
-export function createUserClient(accessToken: string) {
-	return createClient<Database>(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+/** The `scripts` schema as the user, so row level security decides what they can see. */
+export const userScripts = (accessToken: string) =>
+	createClient<Database>(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
 		...authOptions,
 		global: { headers: { Authorization: `Bearer ${accessToken}` } }
-	})
-}
+	}).schema("scripts")
 
 export async function verifyToken(accessToken: string) {
 	const { data, error } = await supabaseAnon.auth.getClaims(accessToken)
-	const id = data?.claims.sub
-	if (error || !id) return null
-	return id
+	return (!error && data?.claims.sub) || null
 }
 
-export const payments = () => supabaseAdmin.schema("payments")
-export const stats = () => supabaseAdmin.schema("stats")
-export const scripts = () => supabaseAdmin.schema("scripts")
-export const profiles = () => supabaseAdmin.schema("profiles")
-export const feedback = () => supabaseAdmin.schema("feedback")
+export const payments = supabaseAdmin.schema("payments")
+export const stats = supabaseAdmin.schema("stats")
+export const scripts = supabaseAdmin.schema("scripts")
+export const profiles = supabaseAdmin.schema("profiles")
+export const feedback = supabaseAdmin.schema("feedback")

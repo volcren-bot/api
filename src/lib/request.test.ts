@@ -2,10 +2,13 @@ import { describe, expect, test } from "bun:test"
 import { bodyTooLarge, createLimiter, getClientIP, logError } from "./request"
 
 describe("createLimiter", () => {
-	test("allows up to max hits per key, then refuses", () => {
-		const limit = createLimiter(2, 60_000)
-		expect([limit("a"), limit("a"), limit("a")]).toEqual([true, true, false])
-		expect(limit("b")).toBe(true)
+	test("allows up to max hits per key, then answers 429 with Retry-After", () => {
+		const limit = createLimiter(2, "Slow down.")
+		const set = { headers: {} as Record<string, string> } as Parameters<typeof limit>[1]
+		expect([limit("a", set), limit("a", set)]).toEqual([null, null])
+		expect(limit("a", set)).toMatchObject({ code: 429, response: { error: "Slow down." } })
+		expect(set.headers["retry-after"]).toBe("60")
+		expect(limit("b", set)).toBeNull()
 	})
 })
 

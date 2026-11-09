@@ -1,7 +1,7 @@
 import { fail, internalError, logError, ok, serverError, type Failure } from "./request"
-import { createUserClient, feedback, payments, scripts, stats, supabaseAdmin } from "./supabase"
+import { feedback, payments, scripts, stats, supabaseAdmin, userScripts } from "./supabase"
 import { reportedMinutes, roleAtLeast } from "./validation"
-import type { ReportPayload, StatsPayload } from "./types/collection"
+import type { ReportPayload, ScriptsFilter, StatsPayload } from "./types/collection"
 import type { Caller } from "./auth"
 import type { Json } from "./types/supabase"
 
@@ -22,20 +22,20 @@ export const revisionFolder = (scriptId: string, revision: number) =>
 	`${scriptId}/${String(revision).padStart(9, "0")}`
 
 const canAccess = (userId: string, scriptId: string) =>
-	scripts().rpc("can_access", { accesser_id: userId, script_id: scriptId })
+	scripts.rpc("can_access", { accesser_id: userId, script_id: scriptId })
 
 const canView = (userId: string, scriptId: string) =>
-	scripts().rpc("can_view", { viewer_id: userId, script_id: scriptId })
+	scripts.rpc("can_view", { viewer_id: userId, script_id: scriptId })
 
 /** What starting the script would cost the user now: price, the rank the session would take, its fee and the balance needed. */
 const quote = (userId: string, scriptId: string) =>
-	payments().rpc("session_quote", { p_user: userId, p_script: scriptId })
+	payments.rpc("session_quote", { p_user: userId, p_script: scriptId })
 
 const stopSession = (sessionId: string) =>
-	payments().rpc("end_session", { p_session: sessionId, p_reason: "stopped" })
+	payments.rpc("end_session", { p_session: sessionId, p_reason: "stopped" })
 
 async function getCredits(userId: string) {
-	const { data } = await payments()
+	const { data } = await payments
 		.from("accounts")
 		.select("credits")
 		.eq("user_id", userId)
@@ -45,9 +45,9 @@ async function getCredits(userId: string) {
 
 export async function getMe(caller: Caller) {
 	const [config, credits, open] = await Promise.all([
-		payments().from("config").select("min_balance_minutes, extra_session_fee").single(),
+		payments.from("config").select("min_balance_minutes, extra_session_fee").single(),
 		getCredits(caller.id),
-		payments()
+		payments
 			.from("sessions")
 			.select("id", { count: "exact", head: true })
 			.eq("user_id", caller.id)
@@ -75,16 +75,19 @@ const one = <T>(value: T | T[] | null): T | null =>
 	Array.isArray(value) ? (value[0] ?? null) : value
 
 /** Lists official and community scripts the account sees; `community` (tester+) lists only community ones. */
-export async function listScripts(caller: Caller, q: string, category: string, community = false) {
+export async function listScripts(
+	caller: Caller,
+	{ q = "", category, community = false }: ScriptsFilter
+) {
 	if (community && !roleAtLeast(caller.role, "tester"))
 		return fail({ code: 403, error: "Only testers can browse community scripts." })
 
-	const user = createUserClient(caller.token)
+	const user = userScripts(caller.token)
 	const text = q.trim().toLowerCase()
 	const pattern = text ? `"%${text.replace(/[\\%_]/g, "\\$&").replace(/["\\]/g, "\\$&")}%"` : null
 
 	const base = () => {
-		let query = user.schema("scripts").from("scripts").select(LIST_COLUMNS)
+		let query = user.from("scripts").select(LIST_COLUMNS)
 		if (pattern) query = query.or(`title.ilike.${pattern},description.ilike.${pattern}`)
 		if (category) query = query.contains("metadata.categories", [category])
 		return query.limit(MAX_LISTED)
@@ -115,8 +118,8 @@ export async function listScripts(caller: Caller, q: string, category: string, c
 
 	const ids = listed.map(({ s }) => s.id)
 	const [authors, online, access] = await Promise.all([
-		scripts().rpc("get_authors", { script_ids: ids }),
-		stats().rpc("online_per_script"),
+		scripts.rpc("get_authors", { script_ids: ids }),
+		stats.rpc("online_per_script"),
 		checkAccess(caller.id, ids)
 	])
 	const names = new Map((authors.data ?? []).map((a) => [a.script_id, a.username]))
@@ -194,9 +197,7 @@ export const redeemFailure = (status: string): Failure | null =>
 
 /** Redeems a share code as the caller, marking it used and adding the grant in one step. */
 export async function redeemCode(caller: Caller, code: string) {
-	const { data, error } = await createUserClient(caller.token)
-		.schema("scripts")
-		.rpc("redeem_share_code", { p_code: code })
+	const { data, error } = await userScripts(caller.token).rpc("redeem_share_code", { p_code: code })
 	if (error)
 		return error.code === "42501"
 			? fail({ code: 403, error: "This account can't redeem codes." })
@@ -207,10 +208,8 @@ export async function redeemCode(caller: Caller, code: string) {
 	return ok({ script_id: result.script_id, url: result.url })
 }
 
-/** Removes a granted script from the caller's account. */
 export async function removeGrant(caller: Caller, scriptId: string) {
-	const { data, error } = await createUserClient(caller.token)
-		.schema("scripts")
+	const { data, error } = await userScripts(caller.token)
 		.from("grants")
 		.delete()
 		.eq("script_id", scriptId)
@@ -223,7 +222,7 @@ export async function removeGrant(caller: Caller, scriptId: string) {
 }
 
 export async function startSession(caller: Caller, scriptId: string) {
-	const { data, error } = await payments().rpc("start_session", {
+	const { data, error } = await payments.rpc("start_session", {
 		p_user: caller.id,
 		p_script: scriptId
 	})
@@ -239,13 +238,13 @@ export async function startSession(caller: Caller, scriptId: string) {
 				started.files.map((name) => `${folder}/${name}`),
 				SIGNED_URL_SECONDS
 			),
-			scripts()
+			scripts
 				.from("version_keys")
 				.select("key")
 				.eq("id", scriptId)
 				.eq("revision", started.revision)
 				.maybeSingle(),
-			payments().from("sessions").select("price").eq("id", started.session_id).single()
+			payments.from("sessions").select("price").eq("id", started.session_id).single()
 		])
 	if (signErr || keyErr || signed.some((entry) => entry.error || !entry.signedUrl)) {
 		// Don't bill for a session the launcher can't use.
@@ -256,7 +255,7 @@ export async function startSession(caller: Caller, scriptId: string) {
 		})
 	}
 
-	openedAt.set(started.session_id, Date.now())
+	reportedAt.set(started.session_id, Date.now())
 	return ok({
 		session_id: started.session_id,
 		revision: started.revision,
@@ -273,10 +272,7 @@ export async function startSession(caller: Caller, scriptId: string) {
 /** Strips PostgREST's `\x` bytea prefix. */
 export const hexKey = (bytea: string) => bytea.replace(/^\\x/, "")
 
-/**
- * A refused start with the balance it needed when credits are what refused it.
- * `can_access` refuses a short balance too, which arrives as a 403.
- */
+/** Adds the balance needed when credits refused the start; `can_access` refuses those as a 403 too. */
 async function withRequired(userId: string, scriptId: string, failure: Failure): Promise<Failure> {
 	if (failure.code === 402)
 		return { ...failure, required: (await quote(userId, scriptId)).data?.[0]?.required }
@@ -310,26 +306,26 @@ export async function quoteScript(caller: Caller, scriptId: string) {
 
 /** The rank a running session holds now and the fee it accrues at it, in credits per 30 days. */
 async function sessionFee(userId: string, sessionId: string) {
-	const { data: rank } = await payments().rpc("session_rank", { p_session: sessionId })
-	const { data: fee } = await payments().rpc("session_fee", { p_user: userId, p_rank: rank ?? 0 })
+	const { data: rank } = await payments.rpc("session_rank", { p_session: sessionId })
+	const { data: fee } = await payments.rpc("session_fee", { p_user: userId, p_rank: rank ?? 0 })
 	return { rank: rank ?? 0, fee: fee ?? 0 }
 }
 
 /** When each open session last reported, to cap the runtime a report can claim. */
-const openedAt = new Map<string, number>()
+const reportedAt = new Map<string, number>()
 
 // Server-ended sessions never come back here, so drop idle ones.
 setInterval(
 	() => {
 		const cutoff = Date.now() - 10 * 60 * 1000
-		for (const [id, at] of openedAt) if (at < cutoff) openedAt.delete(id)
+		for (const [id, at] of reportedAt) if (at < cutoff) reportedAt.delete(id)
 	},
 	5 * 60 * 1000
 ).unref()
 
 /** The caller's session; someone else's looks like a missing one, so ids can't be probed. */
 async function ownedSession(sessionId: string, userId: string) {
-	const { data, error } = await payments()
+	const { data, error } = await payments
 		.from("sessions")
 		.select("end_reason")
 		.eq("id", sessionId)
@@ -348,12 +344,12 @@ export async function heartbeat(
 	const owned = await ownedSession(sessionId, caller.id)
 	if (owned.failure) return owned
 
-	const { data: alive, error } = await payments().rpc("heartbeat_session", { p_session: sessionId })
+	const { data: alive, error } = await payments.rpc("heartbeat_session", { p_session: sessionId })
 	if (error) return serverError("Failed to send the heartbeat.", error)
-	if (!alive) openedAt.delete(sessionId)
+	if (!alive) reportedAt.delete(sessionId)
 
 	const [{ data: after }, credits, running] = await Promise.all([
-		payments()
+		payments
 			.from("sessions")
 			.select("end_reason, charged_until, fee_charged")
 			.eq("id", sessionId)
@@ -392,19 +388,19 @@ export async function endSession(caller: Caller, sessionId: string) {
 	const { data, error } = await stopSession(sessionId)
 	if (error) return serverError("Failed to end the session.", error)
 
-	openedAt.delete(sessionId)
+	reportedAt.delete(sessionId)
 	return ok({ charged: data ?? 0 })
 }
 
 /** A rejected report doesn't fail the heartbeat. */
 async function reportStats(sessionId: string, report: StatsPayload) {
 	const now = Date.now()
-	const since = openedAt.get(sessionId) ?? now - HEARTBEAT_SECONDS * 1000
+	const since = reportedAt.get(sessionId) ?? now - HEARTBEAT_SECONDS * 1000
 	const minutes = reportedMinutes(report.minutes, now - since)
-	openedAt.set(sessionId, now)
+	reportedAt.set(sessionId, now)
 
 	// The database validates against the script's limits and stores it in one transaction.
-	const { error } = await stats().rpc("report_session", {
+	const { error } = await stats.rpc("report_session", {
 		p_session: sessionId,
 		p_experience: Math.round(report.experience),
 		p_gold: Math.round(report.gold),
@@ -445,13 +441,13 @@ export function mapFeedbackError(error: { code?: string; message?: string }): Fa
 
 /** The caller's sessions of the last 24 hours: what the loader offers to score or report. */
 export async function recentSessions(caller: Caller) {
-	const { data, error } = await feedback().rpc("recent_sessions", { p_user: caller.id })
+	const { data, error } = await feedback.rpc("recent_sessions", { p_user: caller.id })
 	if (error) return serverError("Failed to list your sessions.", error)
 	return ok({ sessions: data })
 }
 
 export async function scoreSession(caller: Caller, sessionId: string, score: number) {
-	const { error } = await feedback().rpc("score_session", {
+	const { error } = await feedback.rpc("score_session", {
 		p_user: caller.id,
 		p_session: sessionId,
 		p_score: score
@@ -471,7 +467,7 @@ export async function reportSession(caller: Caller, sessionId: string, report: R
 	if (jsonBytes(report.diagnostics) > MAX_DIAGNOSTICS_BYTES)
 		return fail({ code: 413, error: "The diagnostics are too large." })
 
-	const { data, error } = await feedback().rpc("report_session", {
+	const { data, error } = await feedback.rpc("report_session", {
 		p_user: caller.id,
 		p_session: sessionId,
 		p_description: report.description,

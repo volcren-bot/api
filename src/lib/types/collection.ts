@@ -1,4 +1,5 @@
 import { t, type Static } from "elysia"
+import { Constants } from "./supabase"
 
 export const UuidParams = t.Object({
 	id: t.String({ format: "uuid", error: "ID must be a valid UUID." })
@@ -14,13 +15,20 @@ export const AuthHeaders = t.Object({
 
 export const ScriptsQuery = t.Object({
 	q: t.Optional(t.String({ maxLength: 100, description: "Search the title and description" })),
-	category: t.Optional(t.String({ maxLength: 30, description: "Only scripts in this category" })),
+	category: t.Optional(
+		t.UnionEnum(Constants.scripts.Enums.category, {
+			description: "Only scripts in this category",
+			error: "Unknown category."
+		})
+	),
 	community: t.Optional(
 		t.BooleanString({
 			description: "Tester+ only: list every community script the account can see"
 		})
 	)
 })
+
+export type ScriptsFilter = Static<typeof ScriptsQuery>
 
 /** The documented answers of a signed-in endpoint: the ones every such endpoint gives, then its own. */
 export const authResponses = (own: Record<number, { description: string }>) => ({

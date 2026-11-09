@@ -1,4 +1,4 @@
-import { status } from "elysia"
+import { status, type Context } from "elysia"
 import { rateLimit } from "elysia-rate-limit"
 import type { ElysiaApp } from "$src/index"
 
@@ -11,11 +11,13 @@ export function getClientIP(request: Request, server: IPServer | null | undefine
 	return request.headers.get("x-real-ip") ?? server?.requestIP(request)?.address ?? "unknown"
 }
 
+const WINDOW_MS = 60 * 1000
+
 /** A route group's limit of `max` requests a minute per IP. */
 export const ipRateLimit = (app: ElysiaApp, max: number) =>
 	rateLimit({
 		scoping: "scoped",
-		duration: 60 * 1000,
+		duration: WINDOW_MS,
 		max,
 		errorResponse: `You've reached the ${max} requests/min limit.`,
 		generator: getClientIP,
@@ -41,7 +43,7 @@ export function logError(message: string, detail?: unknown) {
 
 /** Why a request failed, as the launcher sees it: `{ error }`, plus `reason` or `required` where they apply. */
 export interface Failure {
-	code: 402 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500 | 502
+	code: 401 | 402 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500 | 502
 	reason?: string
 	error: string
 	required?: number
@@ -66,22 +68,24 @@ export function reply<R extends Outcome<unknown>>(outcome: R) {
 	return status(code, body)
 }
 
-/** Fixed-window counter per key. Returns false once a key goes over `max` hits within `duration` ms. */
-export function createLimiter(max: number, duration: number) {
+/** Fixed one-minute window per key: past `max` hits it answers 429 with `Retry-After`, otherwise null. */
+export function createLimiter(max: number, error: string) {
 	const hits = new Map<string, { count: number; reset: number }>()
 
 	setInterval(() => {
 		const now = Date.now()
 		for (const [key, entry] of hits) if (entry.reset <= now) hits.delete(key)
-	}, duration).unref()
+	}, WINDOW_MS).unref()
 
-	return (key: string) => {
+	return (key: string, set: Context["set"]) => {
 		const now = Date.now()
 		const entry = hits.get(key)
 		if (!entry || entry.reset <= now) {
-			hits.set(key, { count: 1, reset: now + duration })
-			return true
+			hits.set(key, { count: 1, reset: now + WINDOW_MS })
+			return null
 		}
-		return ++entry.count <= max
+		if (++entry.count <= max) return null
+		set.headers["retry-after"] = String(Math.ceil((entry.reset - now) / 1000))
+		return status(429, { error })
 	}
 }

@@ -61,7 +61,7 @@ describe("bearerToken", () => {
 
 test("authenticate answers 401 without a token", async () => {
 	const result = await auth.authenticate(undefined)
-	expect(result.code).toBe(401)
+	expect(result.failure?.code).toBe(401)
 })
 
 describe("mapFeedbackError", () => {

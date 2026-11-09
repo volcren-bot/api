@@ -6,8 +6,9 @@ import { normalizeShareCode } from "$lib/validation"
 import { authResponses, RedeemBody, ScriptsQuery, UuidParams } from "$lib/types/collection"
 
 // Extra guards so the database's failure counter isn't the only defense against code guessing.
-const redeemUserLimiter = createLimiter(5, 60 * 1000)
-const redeemIpLimiter = createLimiter(10, 60 * 1000)
+const TOO_FAST = "You're redeeming codes too fast. Try again in a minute."
+const redeemUserLimiter = createLimiter(5, TOO_FAST)
+const redeemIpLimiter = createLimiter(10, TOO_FAST)
 
 export default (app: ElysiaApp) =>
 	app
@@ -16,12 +17,7 @@ export default (app: ElysiaApp) =>
 		.get(
 			"",
 			async ({ caller, query, set }) => {
-				const listed = await listScripts(
-					caller,
-					query.q ?? "",
-					query.category ?? "",
-					query.community ?? false
-				)
+				const listed = await listScripts(caller, query)
 				if (!listed.failure) set.headers["cache-control"] = "private, max-age=30"
 				return reply(listed)
 			},
@@ -60,10 +56,9 @@ export default (app: ElysiaApp) =>
 		.post(
 			"redeem",
 			async ({ caller, body, set, status, request, server }) => {
-				if (!redeemUserLimiter(caller.id) || !redeemIpLimiter(getClientIP(request, server))) {
-					set.headers["retry-after"] = "60"
-					return status(429, { error: "You're redeeming codes too fast. Try again in a minute." })
-				}
+				const limited =
+					redeemUserLimiter(caller.id, set) ?? redeemIpLimiter(getClientIP(request, server), set)
+				if (limited) return limited
 
 				const code = normalizeShareCode(body.code)
 				if (!code) return status(422, { error: "A share code is 64 hexadecimal digits." })

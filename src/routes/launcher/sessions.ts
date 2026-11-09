@@ -18,10 +18,10 @@ import {
 	UuidParams
 } from "$lib/types/collection"
 
-const startLimiter = createLimiter(10, 60 * 1000)
-const heartbeatLimiter = createLimiter(4, 60 * 1000)
-const scoreLimiter = createLimiter(20, 60 * 1000)
-const reportLimiter = createLimiter(5, 60 * 1000)
+const startLimiter = createLimiter(10, "You're starting sessions too fast. Try again in a minute.")
+const heartbeatLimiter = createLimiter(4, "Too many heartbeats for this session.")
+const scoreLimiter = createLimiter(20, "You're scoring too fast. Try again in a minute.")
+const reportLimiter = createLimiter(5, "You're sending reports too fast. Try again in a minute.")
 
 export default (app: ElysiaApp) =>
 	app
@@ -29,11 +29,8 @@ export default (app: ElysiaApp) =>
 		.use(auth)
 		.post(
 			"",
-			async ({ caller, body, status }) => {
-				if (!startLimiter(caller.id))
-					return status(429, { error: "You're starting sessions too fast. Try again in a minute." })
-				return reply(await startSession(caller, body.script_id))
-			},
+			async ({ caller, body, set }) =>
+				startLimiter(caller.id, set) ?? reply(await startSession(caller, body.script_id)),
 			{
 				auth: true,
 				body: StartBody,
@@ -55,11 +52,8 @@ Rate limit: 10 starts per minute per user.`,
 		)
 		.post(
 			":id/heartbeat",
-			async ({ caller, params: { id }, body, status }) => {
-				if (!heartbeatLimiter(id))
-					return status(429, { error: "Too many heartbeats for this session." })
-				return reply(await heartbeat(caller, id, body?.stats))
-			},
+			async ({ caller, params: { id }, body, set }) =>
+				heartbeatLimiter(id, set) ?? reply(await heartbeat(caller, id, body?.stats)),
 			{
 				auth: true,
 				params: UuidParams,
@@ -106,11 +100,8 @@ Rate limit: 4 per minute per session.`,
 		})
 		.post(
 			":id/score",
-			async ({ caller, params: { id }, body, status }) => {
-				if (!scoreLimiter(caller.id))
-					return status(429, { error: "You're scoring too fast. Try again in a minute." })
-				return reply(await scoreSession(caller, id, body.score))
-			},
+			async ({ caller, params: { id }, body, set }) =>
+				scoreLimiter(caller.id, set) ?? reply(await scoreSession(caller, id, body.score)),
 			{
 				auth: true,
 				params: UuidParams,
@@ -132,11 +123,8 @@ Rate limit: 20 per minute per user.`,
 		)
 		.post(
 			":id/report",
-			async ({ caller, params: { id }, body, status }) => {
-				if (!reportLimiter(caller.id))
-					return status(429, { error: "You're sending reports too fast. Try again in a minute." })
-				return reply(await reportSession(caller, id, body))
-			},
+			async ({ caller, params: { id }, body, set }) =>
+				reportLimiter(caller.id, set) ?? reply(await reportSession(caller, id, body)),
 			{
 				auth: true,
 				params: UuidParams,

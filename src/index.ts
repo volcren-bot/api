@@ -4,7 +4,7 @@ import { bodyTooLarge, getClientIP, REPORT_BODY_BYTES } from "$lib/request"
 import openapi from "@elysiajs/openapi"
 import { autoload } from "elysia-autoload"
 
-console.log(`🔥 volcren-api is starting...`)
+console.log(`volcren-api is starting...`)
 
 const app = new Elysia()
 
@@ -124,5 +124,5 @@ app.listen({
 
 export type ElysiaApp = typeof app
 
-console.log(`🦊 volcren-api is running at ${app.server!.url}`)
+console.log(`🔥 volcren-api is running at ${app.server!.url}`)
 console.log(`📚 Documentation live at ${app.server!.url}docs`)
