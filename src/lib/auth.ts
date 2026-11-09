@@ -1,5 +1,7 @@
+import { Elysia } from "elysia"
 import { logError } from "./request"
 import { profiles, verifyToken } from "./supabase"
+import { AuthHeaders } from "./types/collection"
 
 export interface Caller {
 	id: string
@@ -9,7 +11,7 @@ export interface Caller {
 	role: string
 }
 
-export type AuthResult =
+type AuthResult =
 	| { caller: Caller; code: 200; error: null }
 	| { caller: null; code: 401 | 403 | 500; error: string }
 
@@ -17,7 +19,7 @@ export function bearerToken(header: string | undefined | null) {
 	return header?.match(/^Bearer (\S+)$/i)?.[1] ?? null
 }
 
-/** Entry point of every launcher endpoint: 401 is retryable after a refresh, 403 is not. */
+/** 401 is retryable after a refresh, 403 is not. */
 export async function authenticate(header: string | undefined | null): Promise<AuthResult> {
 	const token = bearerToken(header)
 	if (!token) return { caller: null, code: 401, error: "Missing access token." }
@@ -46,3 +48,16 @@ export async function authenticate(header: string | undefined | null): Promise<A
 		error: null
 	}
 }
+
+/** `auth: true` on a route requires the bearer header and hands the handler the `caller`. */
+export const auth = new Elysia({ name: "auth" }).macro({
+	auth: {
+		headers: AuthHeaders,
+		detail: { security: [{ bearerAuth: [] }] },
+		async resolve({ headers, status }) {
+			const result = await authenticate(headers.authorization)
+			if (result.error != null) return status(result.code, { error: result.error })
+			return { caller: result.caller }
+		}
+	}
+})

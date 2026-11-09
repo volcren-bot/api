@@ -1,11 +1,8 @@
 import { Elysia } from "elysia"
 import { cors } from "@elysiajs/cors"
-import { serverTiming } from "@elysiajs/server-timing"
 import { bodyTooLarge, getClientIP, REPORT_BODY_BYTES } from "$lib/request"
 import openapi from "@elysiajs/openapi"
 import { autoload } from "elysia-autoload"
-export { t } from "elysia"
-export { rateLimit } from "elysia-rate-limit"
 
 console.log(`🔥 volcren-api is starting...`)
 
@@ -13,8 +10,7 @@ const app = new Elysia()
 
 app.onAfterResponse((response) => {
 	const { request, path, set, server } = response
-	if (path === "/docs" || path === "/docs/" || path === "/docs/json" || path === "/docs/json/")
-		return
+	if (/^\/docs(\/json)?\/?$/.test(path)) return
 
 	const ip = getClientIP(request, server)
 	const userAgent = request.headers.get("user-agent")
@@ -35,7 +31,10 @@ app.onRequest(({ request, set }) => {
 app.onError(({ code, error, set }) => {
 	if (code === "VALIDATION") {
 		set.status = 422
-		return { error: error.message.split("\n")[0] }
+		const custom = error.customError
+		return {
+			error: typeof custom === "string" ? custom : (error.all[0]?.summary ?? "Invalid request.")
+		}
 	}
 	if (code === "NOT_FOUND") {
 		set.status = 404
@@ -116,8 +115,6 @@ app.use(
 		ignore: ["**/*.test.ts", "**/*.spec.ts"]
 	})
 )
-
-app.use(serverTiming())
 
 app.listen({
 	hostname: process.env.HOST ?? "0.0.0.0",

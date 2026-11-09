@@ -48,7 +48,7 @@ Every endpoint except `GET /` takes `Authorization: Bearer <supabase access toke
 | `GET /launcher/scripts/:id/quote`               | `{ price, rank, fee, required }`. What starting the script would cost the account now. See Sessions.                                                           |
 | `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                                     |
 | `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                                   |
-| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, rank, fee, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. See Sessions.         |
+| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, rank, fee, entry, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. See Sessions.  |
 | `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, credits, charged_until, rank, fee, fee_charged, stats?: { accepted, reason? } }` |
 | `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                                 |
 | `GET /launcher/sessions`                        | `{ sessions: [{ session_id, script_id, title, url, revision, started_at, ended_at, score, reports }] }`. The last 24 hours. See Feedback.                      |
@@ -87,15 +87,16 @@ Scores and bug reports are internal: the script's author sees score aggregates a
 
 ## Layout
 
-| Path                    | Contents                                                                  |
-| ----------------------- | ------------------------------------------------------------------------- |
-| `src/index.ts`          | Server, CORS, OpenAPI docs, error shape, route autoload.                  |
-| `src/routes/`           | One file per route group. The path is the URL.                            |
-| `src/lib/auth.ts`       | Token check, ban check.                                                   |
-| `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, stats, feedback. |
-| `src/lib/supabase.ts`   | Admin, anon and per-user clients.                                         |
-| `src/lib/validation.ts` | Runtime a report can claim.                                               |
-| `src/lib/types/`        | Generated database types and request schemas.                             |
+| Path                    | Contents                                                                                                  |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- |
+| `src/index.ts`          | Server, CORS, OpenAPI docs, error shape, route autoload.                                                  |
+| `src/routes/`           | One file per route group. The path is the URL.                                                            |
+| `src/lib/auth.ts`       | Token check, ban check, and the `auth: true` route macro that gives handlers the `caller`.                |
+| `src/lib/request.ts`    | Client IP, rate and body limits, error refs, and the `Outcome` a lib function hands its route to `reply`. |
+| `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, stats, feedback.                                 |
+| `src/lib/supabase.ts`   | Admin, anon and per-user clients.                                                                         |
+| `src/lib/validation.ts` | Runtime a report can claim.                                                                               |
+| `src/lib/types/`        | Generated database types and request schemas.                                                             |
 
 ## Known gaps
 

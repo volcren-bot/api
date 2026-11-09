@@ -1,5 +1,4 @@
-import { t } from "elysia"
-import type { Static } from "elysia"
+import { t, type Static } from "elysia"
 
 export const UuidParams = t.Object({
 	id: t.String({ format: "uuid", error: "ID must be a valid UUID." })
@@ -11,6 +10,24 @@ export const AuthHeaders = t.Object({
 		examples: ["Bearer abcdef012345..."],
 		error: "Authorization header is missing."
 	})
+})
+
+export const ScriptsQuery = t.Object({
+	q: t.Optional(t.String({ maxLength: 100, description: "Search the title and description" })),
+	category: t.Optional(t.String({ maxLength: 30, description: "Only scripts in this category" })),
+	community: t.Optional(
+		t.BooleanString({
+			description: "Tester+ only: list every community script the account can see"
+		})
+	)
+})
+
+/** The documented answers of a signed-in endpoint: the ones every such endpoint gives, then its own. */
+export const authResponses = (own: Record<number, { description: string }>) => ({
+	401: { description: "The token is missing, invalid or expired. Refresh it and retry." },
+	403: { description: "The account is banned or deleted." },
+	429: { description: "You are rate limited." },
+	...own
 })
 
 export const StatsSchema = t.Object({
