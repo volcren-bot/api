@@ -16,10 +16,10 @@ export const AuthHeaders = t.Object({
 export const ScriptsQuery = t.Object({
 	q: t.Optional(t.String({ maxLength: 100, description: "Search the title and description" })),
 	category: t.Optional(
-		t.UnionEnum(Constants.scripts.Enums.category, {
-			description: "Only scripts in this category",
-			error: "Unknown category."
-		})
+		t.Union(
+			Constants.scripts.Enums.category.map((category) => t.Literal(category)),
+			{ description: "Only scripts in this category", error: "Unknown category." }
+		)
 	),
 	community: t.Optional(
 		t.BooleanString({
