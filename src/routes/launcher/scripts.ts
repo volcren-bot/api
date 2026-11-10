@@ -28,7 +28,7 @@ export default (app: ElysiaApp) =>
 					tags: ["Scripts"],
 					summary: "Scripts you can see",
 					description:
-						"Scripts the account can see, with price in credits per minute, live revision, author, online users and whether the account can run it right now (`can_access`). `community` tells official scripts (by a scripter or above) from community ones, and `granted` marks scripts that came from a share code. The default list is the published official scripts plus the community scripts the account wrote or was granted, and granted official scripts even when unpublished. `?community=true` (tester+) lists every community script instead. Rate limit: 30 requests per minute per IP.",
+						"Scripts the account can see, with price in microcredits per hour (1,000,000 = 1 CREDIT), live revision, author, online users and whether the account can run it right now (`can_access`). `community` tells official scripts (by a scripter or above) from community ones, and `granted` marks scripts that came from a share code. The default list is the published official scripts plus the community scripts the account wrote or was granted, and granted official scripts even when unpublished. `?community=true` (tester+) lists every community script instead. Rate limit: 30 requests per minute per IP.",
 					responses: authResponses({
 						200: { description: "The scripts" },
 						403: {
@@ -46,7 +46,7 @@ export default (app: ElysiaApp) =>
 				tags: ["Scripts"],
 				summary: "What starting a script would cost",
 				description:
-					"What a session of this script would cost the account if it started now: `price` in credits per minute after the account's exemptions (0 for the author, a grant and tester+, where the listed price doesn't apply), the `rank` it would take among the account's open sessions, the extra-session `fee` at that rank in credits per 30 days, and the balance `required` to start. Rate limit: 30 requests per minute per IP.",
+					"What a session of this script would cost the account if it started now: `price` in microcredits per hour after the account's exemptions (0 for the author, a grant and tester+, where the listed price doesn't apply), the `rank` it would take among the account's open sessions, the extra-session `fee` at that rank in microcredits per 30 days, and the balance `required` to start in microcredits. Rate limit: 30 requests per minute per IP.",
 				responses: authResponses({
 					200: { description: "`{ price, rank, fee, required }`" },
 					404: { description: "No such script, or the account can't see it." }

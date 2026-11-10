@@ -6,13 +6,13 @@ import type { Caller } from "./auth"
 import type { Json } from "./types/supabase"
 
 /** Bump when a launcher endpoint changes in a way old launchers can't handle. `GET /launcher/me` reports it. */
-export const API_VERSION = 2
+export const API_VERSION = 3
 const HEARTBEAT_SECONDS = 60
 const SIGNED_URL_SECONDS = 60
 const MAX_LISTED = 200
 const ACCESS_CHECK_BATCH = 25
 
-/** The unit `extra_session_fee` is quoted in: credits per 30 days of running (payments.minutes_per_month). */
+/** The unit `extra_session_fee` is quoted in: microcredits per 30 days of running (payments.minutes_per_month). */
 const MINUTES_PER_MONTH = 30 * 24 * 60
 
 const COVERS_URL = `${process.env.SUPABASE_URL}/storage/v1/object/public/imgs/scripts`
@@ -34,19 +34,19 @@ const quote = (userId: string, scriptId: string) =>
 const stopSession = (sessionId: string) =>
 	payments.rpc("end_session", { p_session: sessionId, p_reason: "stopped" })
 
-async function getCredits(userId: string) {
+async function getMicrocredits(userId: string) {
 	const { data } = await payments
 		.from("accounts")
-		.select("credits")
+		.select("microcredits")
 		.eq("user_id", userId)
 		.maybeSingle()
-	return data?.credits ?? 0
+	return data?.microcredits ?? 0
 }
 
 export async function getMe(caller: Caller) {
-	const [config, credits, open] = await Promise.all([
+	const [config, microcredits, open] = await Promise.all([
 		payments.from("config").select("min_balance_minutes, extra_session_fee").single(),
-		getCredits(caller.id),
+		getMicrocredits(caller.id),
 		payments
 			.from("sessions")
 			.select("id", { count: "exact", head: true })
@@ -58,7 +58,7 @@ export async function getMe(caller: Caller) {
 		username: caller.username,
 		avatar_url: caller.avatar || null,
 		role: caller.role,
-		credits,
+		microcredits,
 		min_balance_minutes: config.data.min_balance_minutes,
 		open_sessions: open.count ?? 0,
 		// Tester+ pay no fee; the database decides, this is what it would charge everyone else
@@ -278,15 +278,15 @@ async function withRequired(userId: string, scriptId: string, failure: Failure):
 		return { ...failure, required: (await quote(userId, scriptId)).data?.[0]?.required }
 	if (failure.code !== 403) return failure
 
-	const [runnable, visible, quoted, credits] = await Promise.all([
+	const [runnable, visible, quoted, microcredits] = await Promise.all([
 		canAccess(userId, scriptId),
 		canView(userId, scriptId),
 		quote(userId, scriptId),
-		getCredits(userId)
+		getMicrocredits(userId)
 	])
 	const required = quoted.data?.[0]?.required ?? 0
 	// A runnable script is never refused for credits.
-	if (runnable.data === true || visible.data !== true || required <= 0 || credits >= required)
+	if (runnable.data === true || visible.data !== true || required <= 0 || microcredits >= required)
 		return failure
 	return { ...mapStartError({ code: "23514" }), required }
 }
@@ -304,7 +304,7 @@ export async function quoteScript(caller: Caller, scriptId: string) {
 	return found ? ok(found) : fail({ code: 404, error: "Script not found." })
 }
 
-/** The rank a running session holds now and the fee it accrues at it, in credits per 30 days. */
+/** The rank a running session holds now and the fee it accrues at it, in microcredits per 30 days. */
 async function sessionFee(userId: string, sessionId: string) {
 	const { data: rank } = await payments.rpc("session_rank", { p_session: sessionId })
 	const { data: fee } = await payments.rpc("session_fee", { p_user: userId, p_rank: rank ?? 0 })
@@ -348,13 +348,13 @@ export async function heartbeat(
 	if (error) return serverError("Failed to send the heartbeat.", error)
 	if (!alive) reportedAt.delete(sessionId)
 
-	const [{ data: after }, credits, running] = await Promise.all([
+	const [{ data: after }, microcredits, running] = await Promise.all([
 		payments
 			.from("sessions")
 			.select("end_reason, charged_until, fee_charged")
 			.eq("id", sessionId)
 			.single(),
-		getCredits(caller.id),
+		getMicrocredits(caller.id),
 		alive
 			? Promise.all([sessionFee(caller.id, sessionId), report && reportStats(sessionId, report)])
 			: null
@@ -365,14 +365,14 @@ export async function heartbeat(
 		return ok({
 			alive: false,
 			reason: after?.end_reason ?? owned.data.end_reason,
-			credits,
+			microcredits,
 			charged_until
 		})
 
 	const [{ rank, fee }, reported] = running
 	return ok({
 		alive: true,
-		credits,
+		microcredits,
 		charged_until,
 		rank,
 		fee,

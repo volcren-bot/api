@@ -289,22 +289,22 @@ export type Database = {
     Tables: {
       accounts: {
         Row: {
-          bonus_credits: number
-          credits: number
+          bonus_microcredits: number
+          microcredits: number
           earnings: number
           updated_at: string
           user_id: string
         }
         Insert: {
-          bonus_credits?: number
-          credits?: number
+          bonus_microcredits?: number
+          microcredits?: number
           earnings?: number
           updated_at?: string
           user_id: string
         }
         Update: {
-          bonus_credits?: number
-          credits?: number
+          bonus_microcredits?: number
+          microcredits?: number
           earnings?: number
           updated_at?: string
           user_id?: string
@@ -441,7 +441,7 @@ export type Database = {
           amount: number
           bonus: number
           created_at: string
-          credits: number
+          microcredits: number
           currency: string
           id: string
           paid_at: string | null
@@ -454,7 +454,7 @@ export type Database = {
           amount: number
           bonus?: number
           created_at?: string
-          credits: number
+          microcredits: number
           currency?: string
           id?: string
           paid_at?: string | null
@@ -467,7 +467,7 @@ export type Database = {
           amount?: number
           bonus?: number
           created_at?: string
-          credits?: number
+          microcredits?: number
           currency?: string
           id?: string
           paid_at?: string | null
@@ -481,6 +481,7 @@ export type Database = {
       sessions: {
         Row: {
           author_id: string
+          charged_minutes: number
           charged_until: string
           end_reason: Database["payments"]["Enums"]["session_end"] | null
           ended_at: string | null
@@ -491,12 +492,14 @@ export type Database = {
           price: number
           revision: number
           script_id: string
+          share_accrued: number
           started_at: string
           unpaid: number
           user_id: string
         }
         Insert: {
           author_id: string
+          charged_minutes?: number
           charged_until?: string
           end_reason?: Database["payments"]["Enums"]["session_end"] | null
           ended_at?: string | null
@@ -507,12 +510,14 @@ export type Database = {
           price: number
           revision: number
           script_id: string
+          share_accrued?: number
           started_at?: string
           unpaid?: number
           user_id: string
         }
         Update: {
           author_id?: string
+          charged_minutes?: number
           charged_until?: string
           end_reason?: Database["payments"]["Enums"]["session_end"] | null
           ended_at?: string | null
@@ -523,6 +528,7 @@ export type Database = {
           price?: number
           revision?: number
           script_id?: string
+          share_accrued?: number
           started_at?: string
           unpaid?: number
           user_id?: string

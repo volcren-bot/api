@@ -37,7 +37,7 @@ export default (app: ElysiaApp) =>
 				detail: {
 					tags: ["Sessions"],
 					summary: "Start a session",
-					description: `Starts a usage session for a script and returns the live revision with short-lived signed URLs for its files. The price is fixed for the whole session. \`rank\` is how many sessions the account already had open and \`fee\` the credits per 30 days this one accrues on top of the price at that rank (0 for the first session and for tester+). Send a heartbeat every \`heartbeat_seconds\`, and end the session when the script stops.
+					description: `Starts a usage session for a script and returns the live revision with short-lived signed URLs for its files. \`price\` is microcredits per hour, fixed for the whole session and billed by the minute as a running total rounded up to a whole microcredit. \`rank\` is how many sessions the account already had open and \`fee\` the microcredits per 30 days this one accrues on top of the price at that rank (0 for the first session and for tester+). Send a heartbeat every \`heartbeat_seconds\`, and end the session when the script stops.
 
 Rate limit: 10 starts per minute per user.`,
 					responses: authResponses({
@@ -61,14 +61,15 @@ Rate limit: 10 starts per minute per user.`,
 				detail: {
 					tags: ["Sessions"],
 					summary: "Session heartbeat",
-					description: `Keeps the session alive and bills the minutes that passed. If \`alive\` is false the session is over and \`reason\` says why: \`insufficient_credits\`, \`timeout\` or \`stopped\`; stop the script. \`rank\` and \`fee\` are the session's place among the account's open sessions right now and the extra-session fee it accrues there (credits per 30 days), \`fee_charged\` the fee credits it has paid so far.
+					description: `Keeps the session alive and bills the minutes that passed. If \`alive\` is false the session is over and \`reason\` says why: \`insufficient_credits\`, \`timeout\` or \`stopped\`; stop the script. \`rank\` and \`fee\` are the session's place among the account's open sessions right now and the extra-session fee it accrues there (microcredits per 30 days), \`fee_charged\` the fee microcredits it has paid so far. \`microcredits\` is the balance after the charge.
 
 Optionally reports the stats gained since the last heartbeat. Limits are per minute of runtime, and the runtime a report can claim is capped by the time that really passed. A rejected report doesn't end the session: the answer has \`stats.accepted: false\` and a reason.
 
 Rate limit: 4 per minute per session.`,
 					responses: authResponses({
 						200: {
-							description: "`{ alive, credits, charged_until, rank, fee, fee_charged, stats? }`"
+							description:
+								"`{ alive, microcredits, charged_until, rank, fee, fee_charged, stats? }`"
 						},
 						404: { description: "No such session for this account." }
 					})
@@ -84,7 +85,7 @@ Rate limit: 4 per minute per session.`,
 				description:
 					"Ends the session and bills the started minutes. Safe to call again on a session that already ended.",
 				responses: authResponses({
-					200: { description: "`{ charged }`, the credits charged by this call" },
+					200: { description: "`{ charged }`, the microcredits charged by this call" },
 					404: { description: "No such session for this account." }
 				})
 			}
