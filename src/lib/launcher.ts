@@ -118,10 +118,11 @@ export async function listScripts(
 
 	const ids = listed.map(({ s }) => s.id)
 	const [authors, online, access] = await Promise.all([
-		scripts.rpc("get_authors", { script_ids: ids }),
+		user.rpc("get_authors", { script_ids: ids }),
 		stats.rpc("online_per_script"),
 		checkAccess(caller.id, ids)
 	])
+	if (authors.error) return serverError("Failed to load the script authors.", authors.error)
 	const names = new Map((authors.data ?? []).map((a) => [a.script_id, a.username]))
 	const users = new Map((online.data ?? []).map((o) => [o.script_id, Number(o.users)]))
 
