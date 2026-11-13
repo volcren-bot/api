@@ -59,6 +59,28 @@ describe("bearerToken", () => {
 	})
 })
 
+describe("claimedId", () => {
+	const token = (payload: unknown) =>
+		`h.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.s`
+	const id = "7d081fdd-59de-4a4e-9c29-b2f92d9bc697"
+
+	test("reads the subject a token claims", () => {
+		expect(auth.claimedId(token({ sub: id }))).toBe(id)
+	})
+
+	test("anything but a uuid subject is no claim", () => {
+		expect(auth.claimedId(token({ sub: "1 or 1=1" }))).toBeNull()
+		expect(auth.claimedId(token({}))).toBeNull()
+		expect(auth.claimedId("not-a-jwt")).toBeNull()
+		expect(auth.claimedId("a.%%%.b")).toBeNull()
+	})
+})
+
+test("authenticate answers 401 for a token without a subject", async () => {
+	const result = await auth.authenticate("Bearer a.b.c")
+	expect(result.failure?.code).toBe(401)
+})
+
 test("authenticate answers 401 without a token", async () => {
 	const result = await auth.authenticate(undefined)
 	expect(result.failure?.code).toBe(401)
