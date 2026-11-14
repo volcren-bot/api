@@ -46,6 +46,26 @@ describe("redeemFailure", () => {
 	})
 })
 
+describe("manifestReply", () => {
+	test("returns the live revision and its manifest", () => {
+		const manifest = { queueable: true }
+		expect(launcher.manifestReply([{ revision: 4, manifest }])).toMatchObject({
+			data: { revision: 4, manifest }
+		})
+	})
+
+	test("a revision without a manifest answers null", () => {
+		expect(launcher.manifestReply([{ revision: 2, manifest: null }])).toMatchObject({
+			data: { revision: 2, manifest: null }
+		})
+	})
+
+	test("no row means the script is hidden or has no live revision", () => {
+		expect(launcher.manifestReply([]).failure?.code).toBe(404)
+		expect(launcher.manifestReply(null).failure?.code).toBe(404)
+	})
+})
+
 test("revisions live in a nine digit folder", () => {
 	expect(launcher.revisionFolder("abc", 7)).toBe("abc/000000007")
 })

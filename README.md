@@ -44,7 +44,8 @@ Every endpoint except `GET /` takes `Authorization: Bearer <supabase access toke
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /`                                         | `{ api_version }`. Public.                                                                                                                                          |
 | `GET /launcher/me`                              | `{ username, avatar_url, role, microcredits, min_balance_minutes, open_sessions, extra_session_fee, minutes_per_month, api_version }`                               |
-| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, cover_url, can_access, community, granted, author, online }] }`               |
+| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, queueable, cover_url, can_access, community, granted, author, online }] }`    |
+| `GET /launcher/scripts/:id/manifest`            | `{ revision, manifest }`. The live revision's `manifest.json`, or `null`. See Manifests.                                                                            |
 | `GET /launcher/scripts/:id/quote`               | `{ price, rank, fee, required }`. What starting the script would cost the account now. See Sessions.                                                                |
 | `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                                          |
 | `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                                        |
@@ -64,6 +65,10 @@ Community scripts are never premium and run for their author, tester+ and people
 `POST /launcher/scripts/redeem` redeems a single-use share code (64 hex digits, whitespace and case are forgiven). The database marks the code used and adds the grant in one step, so a code can never work twice. A grant makes the script appear in the list with `granted: true`, and premium scripts run free. Failures: `invalid` (404), `expired` (410), `used`, `own` (the account wrote the script or made the code) and `already_access` (409, the code stays unused), `rate_limited` (429). The API allows 5 redemptions a minute per user and 10 per IP, and the database stops answering an account after 10 failed attempts an hour. `DELETE /launcher/scripts/:id/grant` removes the script again; the code stays used.
 
 `api_version` is 3: launchers that read balances in credits of 0.01 cent and prices per minute would show and check the wrong amounts, so they are told to update.
+
+### Manifests
+
+A revision may carry a `manifest.json`, uploaded with its files and stored unencrypted, so a launcher can show the settings form and build queues before any session starts or is billed. It holds `settings` (the form spec), `queueable` (the loader's queue may run the revision), `goals` (`[{ id, label }]`, live counters a queue entry can stop at) and `finish_grace_minutes`. The database checks only its shape; the launcher validates the form fields. `queueable` in the list is the live revision's value. A launcher caches a manifest by `revision` and fetches it again when the list shows a newer one.
 
 ### Sessions
 

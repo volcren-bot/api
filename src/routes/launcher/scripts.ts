@@ -1,7 +1,7 @@
 import type { ElysiaApp } from "$src/index"
 import { createLimiter, getClientIP, ipRateLimit, reply } from "$lib/request"
 import { auth } from "$lib/auth"
-import { listScripts, quoteScript, redeemCode, removeGrant } from "$lib/launcher"
+import { getManifest, listScripts, quoteScript, redeemCode, removeGrant } from "$lib/launcher"
 import { normalizeShareCode } from "$lib/validation"
 import { authResponses, RedeemBody, ScriptsQuery, UuidParams } from "$lib/types/collection"
 
@@ -28,7 +28,7 @@ export default (app: ElysiaApp) =>
 					tags: ["Scripts"],
 					summary: "Scripts you can see",
 					description:
-						"Scripts the account can see, with price in microcredits per hour (1,000,000 = 1 CREDIT), live revision, author, online users and whether the account can run it right now (`can_access`). `community` tells official scripts (by a scripter or above) from community ones, and `granted` marks scripts that came from a share code. The default list is the published official scripts plus the community scripts the account wrote or was granted, and granted official scripts even when unpublished. `?community=true` (tester+) lists every community script instead. Rate limit: 30 requests per minute per IP.",
+						"Scripts the account can see, with price in microcredits per hour (1,000,000 = 1 CREDIT), live revision, whether that revision can run in a queue (`queueable`), author, online users and whether the account can run it right now (`can_access`). `community` tells official scripts (by a scripter or above) from community ones, and `granted` marks scripts that came from a share code. The default list is the published official scripts plus the community scripts the account wrote or was granted, and granted official scripts even when unpublished. `?community=true` (tester+) lists every community script instead. Rate limit: 30 requests per minute per IP.",
 					responses: authResponses({
 						200: { description: "The scripts" },
 						403: {
@@ -53,6 +53,30 @@ export default (app: ElysiaApp) =>
 				})
 			}
 		})
+		.get(
+			":id/manifest",
+			async ({ caller, params: { id }, set }) => {
+				const found = await getManifest(caller, id)
+				if (!found.failure) set.headers["cache-control"] = "private, max-age=30"
+				return reply(found)
+			},
+			{
+				auth: true,
+				params: UuidParams,
+				detail: {
+					tags: ["Scripts"],
+					summary: "The live revision's manifest",
+					description:
+						"The `manifest.json` of the script's live revision: its settings form (`settings`), whether the queue can run it (`queueable`), the counters a queue entry can use as a goal (`goals`) and how long to wait for it to wrap up after `FINISH` (`finish_grace_minutes`). `manifest` is null when the revision has none. `revision` tells a launcher whether its cached copy is current. Rate limit: 30 requests per minute per IP.",
+					responses: authResponses({
+						200: { description: "`{ revision, manifest }`" },
+						404: {
+							description: "No such script, the account can't see it, or it has no live revision."
+						}
+					})
+				}
+			}
+		)
 		.post(
 			"redeem",
 			async ({ caller, body, set, status, request, server }) => {

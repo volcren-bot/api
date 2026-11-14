@@ -69,7 +69,7 @@ export async function getMe(caller: Caller) {
 }
 
 const LIST_COLUMNS =
-	"id, url, title, description, published, is_community, is_granted, metadata!inner(type, categories, stage, price), protected!inner(author, revision, updated_at)"
+	"id, url, title, description, published, is_community, is_granted, metadata!inner(type, categories, stage, price), protected!inner(author, revision, updated_at, queueable)"
 
 const one = <T>(value: T | T[] | null): T | null =>
 	Array.isArray(value) ? (value[0] ?? null) : value
@@ -137,6 +137,7 @@ export async function listScripts(
 			type: metadata.type,
 			price: metadata.price,
 			revision: info.revision > 0 ? info.revision : null,
+			queueable: info.queueable,
 			cover_url: `${COVERS_URL}/${s.id}/cover.webp`,
 			can_access: access.get(s.id) ?? false,
 			community: s.is_community === true,
@@ -303,6 +304,21 @@ export async function quoteScript(caller: Caller, scriptId: string) {
 	if (quoted.error) return serverError("Failed to quote the script.", quoted.error)
 	const found = quoted.data[0]
 	return found ? ok(found) : fail({ code: 404, error: "Script not found." })
+}
+
+export function manifestReply(rows: { revision: number; manifest: Json | null }[] | null) {
+	const live = rows?.[0]
+	return live
+		? ok({ revision: live.revision, manifest: live.manifest })
+		: fail({ code: 404, error: "Script not found." })
+}
+
+export async function getManifest(caller: Caller, scriptId: string) {
+	const { data, error } = await userScripts(caller.token).rpc("live_manifest", {
+		script_id: scriptId
+	})
+	if (error) return serverError("Failed to load the script's manifest.", error)
+	return manifestReply(data)
 }
 
 /** The rank a running session holds now and the fee it accrues at it, in microcredits per 30 days. */

@@ -960,6 +960,7 @@ export type Database = {
           created_at: string
           id: string
           last_revision: number
+          queueable: boolean
           revision: number
           updated_at: string
         }
@@ -968,6 +969,7 @@ export type Database = {
           created_at?: string
           id: string
           last_revision?: number
+          queueable?: boolean
           revision?: number
           updated_at?: string
         }
@@ -976,6 +978,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_revision?: number
+          queueable?: boolean
           revision?: number
           updated_at?: string
         }
@@ -1133,6 +1136,7 @@ export type Database = {
           entry: string
           files: string[]
           id: string
+          manifest: Json | null
           published_at: string | null
           revision: number
           sizes: number[]
@@ -1143,6 +1147,7 @@ export type Database = {
           entry: string
           files: string[]
           id: string
+          manifest?: Json | null
           published_at?: string | null
           revision: number
           sizes?: number[]
@@ -1153,6 +1158,7 @@ export type Database = {
           entry?: string
           files?: string[]
           id?: string
+          manifest?: Json | null
           published_at?: string | null
           revision?: number
           sizes?: number[]
@@ -1258,6 +1264,13 @@ export type Database = {
           username: string
         }[]
       }
+      live_manifest: {
+        Args: { script_id: string }
+        Returns: {
+          manifest: Json
+          revision: number
+        }[]
+      }
       max_stage: {
         Args: {
           script_id: string
@@ -1298,6 +1311,7 @@ export type Database = {
         Returns: string
       }
       valid_files: { Args: { files: string[] }; Returns: boolean }
+      valid_manifest: { Args: { manifest: Json }; Returns: boolean }
     }
     Enums: {
       category:
