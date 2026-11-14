@@ -311,10 +311,41 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_sessions: {
+        Row: {
+          active_seconds: number
+          end_reason: Database["payments"]["Enums"]["session_end"] | null
+          ended_at: string | null
+          id: string
+          last_seen: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          active_seconds?: number
+          end_reason?: Database["payments"]["Enums"]["session_end"] | null
+          ended_at?: string | null
+          id?: string
+          last_seen?: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          active_seconds?: number
+          end_reason?: Database["payments"]["Enums"]["session_end"] | null
+          ended_at?: string | null
+          id?: string
+          last_seen?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       config: {
         Row: {
           extra_session_fee: number
           id: boolean
+          max_agent_sessions: number
           min_balance_minutes: number
           platform_fee_bps: number
           session_timeout_minutes: number
@@ -322,6 +353,7 @@ export type Database = {
         Insert: {
           extra_session_fee?: number
           id?: boolean
+          max_agent_sessions?: number
           min_balance_minutes?: number
           platform_fee_bps?: number
           session_timeout_minutes?: number
@@ -329,6 +361,7 @@ export type Database = {
         Update: {
           extra_session_fee?: number
           id?: boolean
+          max_agent_sessions?: number
           min_balance_minutes?: number
           platform_fee_bps?: number
           session_timeout_minutes?: number
@@ -554,6 +587,10 @@ export type Database = {
         Args: { p_minutes: number; p_session: string }
         Returns: number
       }
+      end_agent_session: {
+        Args: { p_max_gap: number; p_session: string; p_user: string }
+        Returns: boolean
+      }
       end_session: {
         Args: {
           p_reason: Database["payments"]["Enums"]["session_end"]
@@ -563,6 +600,10 @@ export type Database = {
       }
       end_stale_sessions: { Args: Record<PropertyKey, never>; Returns: number }
       end_user_sessions: { Args: { p_user: string }; Returns: number }
+      heartbeat_agent_session: {
+        Args: { p_max_gap: number; p_session: string; p_user: string }
+        Returns: boolean
+      }
       heartbeat_session: { Args: { p_session: string }; Returns: boolean }
       minutes_per_month: { Args: Record<PropertyKey, never>; Returns: number }
       post_credits: {
@@ -609,6 +650,7 @@ export type Database = {
       }
       session_rank: { Args: { p_session: string }; Returns: number }
       settle_payment: { Args: { p_payment: string }; Returns: boolean }
+      start_agent_session: { Args: { p_user: string }; Returns: string }
       start_session: {
         Args: { p_script: string; p_user: string }
         Returns: {

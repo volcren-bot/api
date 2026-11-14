@@ -93,6 +93,10 @@ Requests with missing or invalid headers, params or body return \`422\`.`
 				{ name: "Account", description: "The signed in account" },
 				{ name: "Scripts", description: "The script store" },
 				{ name: "Sessions", description: "Running scripts: start, heartbeat, end, stats" },
+				{
+					name: "Agent sessions",
+					description: "Metering of free agent runs from the loader's MCP server"
+				},
 				{ name: "Feedback", description: "Internal script scores and bug reports" }
 			],
 			components: {

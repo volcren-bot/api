@@ -409,6 +409,52 @@ export async function endSession(caller: Caller, sessionId: string) {
 	return ok({ charged: data ?? 0 })
 }
 
+/** The longest gap between two agent heartbeats that counts as active time. */
+const AGENT_MAX_GAP_SECONDS = 2 * HEARTBEAT_SECONDS
+
+/** What the agent session functions raise, as the launcher should see it. */
+export function mapAgentError(
+	error: { code?: string; message?: string },
+	message: string
+): Failure {
+	switch (error.code) {
+		case "P0002":
+			return { code: 404, error: "Agent session not found." }
+		case "42501":
+			return { code: 403, error: "This account is banned." }
+		case "54000":
+			return { code: 429, error: "Too many agent sessions are open. End one first." }
+		default:
+			return internalError(message, error)
+	}
+}
+
+export async function startAgentSession(caller: Caller) {
+	const { data, error } = await payments.rpc("start_agent_session", { p_user: caller.id })
+	if (error) return fail(mapAgentError(error, "Failed to start the agent session."))
+	return ok({ id: data, heartbeat_seconds: HEARTBEAT_SECONDS })
+}
+
+export async function agentHeartbeat(caller: Caller, sessionId: string) {
+	const { data, error } = await payments.rpc("heartbeat_agent_session", {
+		p_user: caller.id,
+		p_session: sessionId,
+		p_max_gap: AGENT_MAX_GAP_SECONDS
+	})
+	if (error) return fail(mapAgentError(error, "Failed to send the agent heartbeat."))
+	return ok({ ended: !data })
+}
+
+export async function endAgentSession(caller: Caller, sessionId: string) {
+	const { error } = await payments.rpc("end_agent_session", {
+		p_user: caller.id,
+		p_session: sessionId,
+		p_max_gap: AGENT_MAX_GAP_SECONDS
+	})
+	if (error) return fail(mapAgentError(error, "Failed to end the agent session."))
+	return ok({ ended: true as const })
+}
+
 /** A rejected report doesn't fail the heartbeat. */
 async function reportStats(sessionId: string, report: StatsPayload) {
 	const now = Date.now()

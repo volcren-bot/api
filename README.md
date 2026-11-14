@@ -55,6 +55,9 @@ Every endpoint except `GET /` takes `Authorization: Bearer <supabase access toke
 | `GET /launcher/sessions`                        | `{ sessions: [{ session_id, script_id, title, url, revision, started_at, ended_at, score, reports }] }`. The last 24 hours. See Feedback.                           |
 | `POST /launcher/sessions/:id/score`             | Body `{ score }` (1 to 10). `{ score }`.                                                                                                                            |
 | `POST /launcher/sessions/:id/report`            | Body `{ description, log?, snapshot?, diagnostics? }`. `{ report_id }`.                                                                                             |
+| `POST /launcher/agent-sessions`                 | Body `{}`. `{ id, heartbeat_seconds }`. Free. See Agent sessions.                                                                                                   |
+| `POST /launcher/agent-sessions/:id/heartbeat`   | Body `{}`. `{ ended }`.                                                                                                                                             |
+| `POST /launcher/agent-sessions/:id/end`         | Body `{}`. `{ ended: true }`. Safe to repeat.                                                                                                                       |
 
 ### Community scripts and share codes
 
@@ -78,6 +81,10 @@ Every amount is in **microcredits**: 1,000,000 = 1 CREDIT = 1 EUR. `price` is mi
 
 An account can have any number of sessions open, but every one past the oldest pays an **extra-session fee** on top of its price: `extra_session_fee` microcredits per 30 days of running (`minutes_per_month`, 43200), charged a whole microcredit at a time as it accrues. `rank` is a session's place among the account's open sessions by start time, 0 for the oldest, and is recomputed every minute: when the oldest ends, the next one stops paying. Tester+ pay no fee, and `GET /launcher/me` reports `extra_session_fee: 0` for them. The start and heartbeat answers carry the session's `rank` and `fee`; a launcher about to start a script asks `GET /launcher/scripts/:id/quote` and shows the instance's monthly cost as `price * minutes_per_month / 60 + fee`. The balance needed to start or keep running is `min_balance_minutes` of the price plus the fee for that time, each rounded up, so an extra instance of a free script needs at least a microcredit. A `402` on start carries the `required` balance. `GET /launcher/scripts/:id/quote` answers before anything starts, for a script the account can see: `price` is what the session would be charged, which is 0 for the author, a grant and tester+ whatever the listing says, so a launcher showing or comparing what a session costs must use this one, and `rank`, `fee` and `required` are those the session would get if it started now.
 
+### Agent sessions
+
+Runs from the loader's MCP server are free, but the time they take is metered per account so that pricing can later be decided from data. They are never billed and need no balance. The loader starts an agent session for each run, heartbeats every `heartbeat_seconds` while it runs, and ends it when the run stops. Each heartbeat, and the end, adds the time since the previous one to the session's active seconds, capped at twice `heartbeat_seconds`, so a stalled loader is not counted past the cap. A session without a heartbeat for 5 minutes is ended by the same sweep as script sessions, without counting that gap. `ended: true` means the session was already over and the loader starts a new one. An account can have 8 open at once (`429` past that).
+
 ### Stats
 
 Stats ride on the heartbeat and are optional. `experience` and `gold` are the gain since the previous heartbeat. The script's limits (`stats.limits`) are per minute of runtime, and a pair of 0 and 0 means no limit. The runtime a report can claim is the smaller of `minutes` and the time the server saw pass since the previous report, so a launcher can't claim more than really elapsed. A rejected report returns `stats.accepted: false` with a reason and does not end the session.
@@ -98,7 +105,7 @@ Scores and bug reports are internal: the script's author sees score aggregates a
 | `src/routes/`           | One file per route group. The path is the URL.                                                            |
 | `src/lib/auth.ts`       | Token check, ban check, and the `auth: true` route macro that gives handlers the `caller`.                |
 | `src/lib/request.ts`    | Client IP, rate and body limits, error refs, and the `Outcome` a lib function hands its route to `reply`. |
-| `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, stats, feedback.                                 |
+| `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, agent sessions, stats, feedback.                 |
 | `src/lib/supabase.ts`   | Admin, anon and per-user clients.                                                                         |
 | `src/lib/validation.ts` | Runtime a report can claim.                                                                               |
 | `src/lib/types/`        | Generated database types and request schemas.                                                             |

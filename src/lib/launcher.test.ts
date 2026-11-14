@@ -125,3 +125,12 @@ test("jsonBytes measures an attachment as the text it was sent as", () => {
 	expect(launcher.jsonBytes({ a: 1 })).toBe(7)
 	expect(launcher.jsonBytes({ a: "é" })).toBe(10)
 })
+
+describe("mapAgentError", () => {
+	test("maps the agent session functions' errors to the statuses the launcher expects", () => {
+		expect(launcher.mapAgentError({ code: "P0002" }, "x").code).toBe(404)
+		expect(launcher.mapAgentError({ code: "42501" }, "x").code).toBe(403)
+		expect(launcher.mapAgentError({ code: "54000" }, "x").code).toBe(429)
+		expect(launcher.mapAgentError({ code: "XX000", message: "boom" }, "x").code).toBe(500)
+	})
+})
