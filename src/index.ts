@@ -3,6 +3,7 @@ import { cors } from "@elysiajs/cors"
 import { bodyTooLarge, getClientIP, REPORT_BODY_BYTES } from "$lib/request"
 import openapi from "@elysiajs/openapi"
 import { autoload } from "elysia-autoload"
+import { startSweeps } from "$lib/sweep"
 
 console.log(`volcren-api is starting...`)
 
@@ -97,7 +98,8 @@ Requests with missing or invalid headers, params or body return \`422\`.`
 					name: "Agent sessions",
 					description: "Metering of free agent runs from the loader's MCP server"
 				},
-				{ name: "Feedback", description: "Internal script scores and bug reports" }
+				{ name: "Feedback", description: "Internal script scores and bug reports" },
+				{ name: "Revisions", description: "Type checks of script revisions" }
 			],
 			components: {
 				securitySchemes: {
@@ -127,6 +129,8 @@ app.listen({
 })
 
 export type ElysiaApp = typeof app
+
+if (process.env.NODE_ENV !== "development") startSweeps()
 
 console.log(`🔥 volcren-api is running at ${app.server!.url}`)
 console.log(`📚 Documentation live at ${app.server!.url}docs`)

@@ -21,7 +21,7 @@ bun run dev              # http://localhost:3000
 | `bun run lint`     | Prettier and ESLint.                           |
 | `bun run gentypes` | Regenerate `src/lib/types/supabase.ts`.        |
 
-Optional: `HOST` and `PORT`.
+Optional: `HOST`, `PORT`, and `CHECKER_DIR` (where the script checker keeps `luau-analyze`, unpacked libs and its temporary runs; defaults to the system temp folder).
 
 ## Contract
 
@@ -40,24 +40,25 @@ Every endpoint except `GET /` takes `Authorization: Bearer <supabase access toke
 | 429    | Rate limited. `Retry-After` is in seconds.                                              |
 | 502    | The script files couldn't be prepared. The session was ended, not billed.               |
 
-| Endpoint                                        | Returns                                                                                                                                                             |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /`                                         | `{ api_version }`. Public.                                                                                                                                          |
-| `GET /launcher/me`                              | `{ username, avatar_url, role, microcredits, min_balance_minutes, open_sessions, extra_session_fee, minutes_per_month, api_version }`                               |
-| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, queueable, cover_url, can_access, community, granted, author, online }] }`    |
-| `GET /launcher/scripts/:id/manifest`            | `{ revision, manifest }`. The live revision's `manifest.json`, or `null`. See Manifests.                                                                            |
-| `GET /launcher/scripts/:id/quote`               | `{ price, rank, fee, required }`. What starting the script would cost the account now. See Sessions.                                                                |
-| `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                                          |
-| `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                                        |
-| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, rank, fee, entry, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. See Sessions.       |
-| `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, microcredits, charged_until, rank, fee, fee_charged, stats?: { accepted, reason? } }` |
-| `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                                      |
-| `GET /launcher/sessions`                        | `{ sessions: [{ session_id, script_id, title, url, revision, started_at, ended_at, score, reports }] }`. The last 24 hours. See Feedback.                           |
-| `POST /launcher/sessions/:id/score`             | Body `{ score }` (1 to 10). `{ score }`.                                                                                                                            |
-| `POST /launcher/sessions/:id/report`            | Body `{ description, log?, snapshot?, diagnostics? }`. `{ report_id }`.                                                                                             |
-| `POST /launcher/agent-sessions`                 | Body `{}`. `{ id, heartbeat_seconds }`. Free. See Agent sessions.                                                                                                   |
-| `POST /launcher/agent-sessions/:id/heartbeat`   | Body `{}`. `{ ended }`.                                                                                                                                             |
-| `POST /launcher/agent-sessions/:id/end`         | Body `{}`. `{ ended: true }`. Safe to repeat.                                                                                                                       |
+| Endpoint                                        | Returns                                                                                                                                                                     |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /`                                         | `{ api_version }`. Public.                                                                                                                                                  |
+| `GET /launcher/me`                              | `{ username, avatar_url, role, microcredits, min_balance_minutes, open_sessions, extra_session_fee, minutes_per_month, api_version }`                                       |
+| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, queueable, cover_url, can_access, community, granted, author, online }] }`            |
+| `GET /launcher/scripts/:id/manifest`            | `{ revision, manifest }`. The live revision's `manifest.json`, or `null`. See Manifests.                                                                                    |
+| `GET /launcher/scripts/:id/quote`               | `{ price, rank, fee, required, requires_host }`. What starting the script would cost the account now. See Sessions and Script checks.                                       |
+| `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                                                  |
+| `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                                                |
+| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, rank, fee, entry, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. See Sessions.               |
+| `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, microcredits, charged_until, rank, fee, fee_charged, stats?: { accepted, reason? } }`         |
+| `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                                              |
+| `GET /launcher/sessions`                        | `{ sessions: [{ session_id, script_id, title, url, revision, started_at, ended_at, score, reports }] }`. The last 24 hours. See Feedback.                                   |
+| `POST /launcher/sessions/:id/score`             | Body `{ score }` (1 to 10). `{ score }`.                                                                                                                                    |
+| `POST /launcher/sessions/:id/report`            | Body `{ description, log?, snapshot?, diagnostics? }`. `{ report_id }`.                                                                                                     |
+| `POST /launcher/agent-sessions`                 | Body `{}`. `{ id, heartbeat_seconds }`. Free. See Agent sessions.                                                                                                           |
+| `POST /launcher/agent-sessions/:id/heartbeat`   | Body `{}`. `{ ended }`.                                                                                                                                                     |
+| `POST /launcher/agent-sessions/:id/end`         | Body `{}`. `{ ended: true }`. Safe to repeat.                                                                                                                               |
+| `POST /scripts/:id/revisions/:revision/check`   | No body. `{ passed, lib, problems: [{ file, line, column, message }] }`. Takes the author's or a moderator's access token, or the script's deploy token. See Script checks. |
 
 ### Community scripts and share codes
 
@@ -80,6 +81,15 @@ Script files are stored encrypted (AES-256-GCM, see the database notes). `key` i
 Every amount is in **microcredits**: 1,000,000 = 1 CREDIT = 1 EUR. `price` is microcredits per hour, fixed when the session starts, and billed by the minute as a running total: after `n` minutes the script has cost `ceil(price * n / 60)`, so the first minute costs at least one microcredit and no session pays more than one microcredit over its exact cost. Send a heartbeat every `heartbeat_seconds`; the database ends a session after 5 minutes without one. When `alive` is false, `reason` is `insufficient_credits`, `timeout` or `stopped`, and the launcher must stop the script.
 
 An account can have any number of sessions open, but every one past the oldest pays an **extra-session fee** on top of its price: `extra_session_fee` microcredits per 30 days of running (`minutes_per_month`, 43200), charged a whole microcredit at a time as it accrues. `rank` is a session's place among the account's open sessions by start time, 0 for the oldest, and is recomputed every minute: when the oldest ends, the next one stops paying. Tester+ pay no fee, and `GET /launcher/me` reports `extra_session_fee: 0` for them. The start and heartbeat answers carry the session's `rank` and `fee`; a launcher about to start a script asks `GET /launcher/scripts/:id/quote` and shows the instance's monthly cost as `price * minutes_per_month / 60 + fee`. The balance needed to start or keep running is `min_balance_minutes` of the price plus the fee for that time, each rounded up, so an extra instance of a free script needs at least a microcredit. A `402` on start carries the `required` balance. `GET /launcher/scripts/:id/quote` answers before anything starts, for a script the account can see: `price` is what the session would be charged, which is 0 for the author, a grant and tester+ whatever the listing says, so a launcher showing or comparing what a session costs must use this one, and `rank`, `fee` and `required` are those the session would get if it started now.
+
+### Script checks
+
+Every revision is type-checked against the newest lib before it can go live, and every live revision again whenever a newer lib is published. The check decrypts the revision's `.luau` files in memory, writes them to a temporary folder next to the unpacked lib, and runs `luau-analyze --mode=strict` with a 60 s limit, one check at a time. Type and syntax errors in the revision's own files count, and so does a file that doesn't start with `--!strict`; lint warnings don't. The result goes to the database through `record_check`, which `publish_version` requires, and a live revision that fails marks its script broken: only its author and moderators see it until a fixed revision goes live.
+
+- **On upload**, the webapp calls `POST /scripts/:id/revisions/:revision/check` between uploading the files and publishing. `passed: false` means `publish_version` will refuse the revision; `502` means the check couldn't run and nothing was recorded.
+- **On a new lib**, the API reads `lib/index.json` from the public `client` bucket every 5 minutes and checks each live revision whose `checked_lib` isn't the newest release, oldest check first, 200 a pass. It runs only when `NODE_ENV` isn't `development`.
+- **The loader** compares `requires_host` from the quote, the host API of the lib the live revision passed when it was published, with its own `HOST_API`, and refuses to start a revision published against a lib it can't run. Sweeps don't change it, so a newer lib doesn't lock older loaders out of revisions that ran on theirs.
+- `luau-analyze` is the official luau-lang release `LUAU_VERSION` in `src/lib/checker.ts`, downloaded once and verified against its pinned sha256. Keep it on the version in `lib/mise.toml` and the client's `release.yml`, so the API checks scripts the way the lib's CI and the loader do.
 
 ### Agent sessions
 
@@ -106,6 +116,8 @@ Scores and bug reports are internal: the script's author sees score aggregates a
 | `src/lib/auth.ts`       | Token check, ban check, and the `auth: true` route macro that gives handlers the `caller`.                |
 | `src/lib/request.ts`    | Client IP, rate and body limits, error refs, and the `Outcome` a lib function hands its route to `reply`. |
 | `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, agent sessions, stats, feedback.                 |
+| `src/lib/checker.ts`    | The script check: `luau-analyze`, lib download, revision decryption, diagnostics.                         |
+| `src/lib/sweep.ts`      | The periodic check of live revisions against a newer lib.                                                 |
 | `src/lib/supabase.ts`   | Admin, anon and per-user clients.                                                                         |
 | `src/lib/validation.ts` | Runtime a report can claim.                                                                               |
 | `src/lib/types/`        | Generated database types and request schemas.                                                             |

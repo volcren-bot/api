@@ -294,16 +294,35 @@ async function withRequired(userId: string, scriptId: string, failure: Failure):
 }
 
 /** `quote` for the launcher, which may only ask about scripts the account can see. */
+async function liveRequiredHost(scriptId: string) {
+	const { data: live, error } = await scripts
+		.from("protected")
+		.select("revision")
+		.eq("id", scriptId)
+		.single()
+	if (error) return { data: null, error }
+	return scripts
+		.from("versions")
+		.select("requires_host")
+		.eq("id", scriptId)
+		.eq("revision", live.revision)
+		.maybeSingle()
+}
+
 export async function quoteScript(caller: Caller, scriptId: string) {
-	const [visible, quoted] = await Promise.all([
+	const [visible, quoted, checked] = await Promise.all([
 		canView(caller.id, scriptId),
-		quote(caller.id, scriptId)
+		quote(caller.id, scriptId),
+		liveRequiredHost(scriptId)
 	])
 	if (visible.error) return serverError("Failed to check the script.", visible.error)
 	if (visible.data !== true) return fail({ code: 404, error: "Script not found." })
 	if (quoted.error) return serverError("Failed to quote the script.", quoted.error)
+	if (checked.error) return serverError("Failed to read the live revision.", checked.error)
 	const found = quoted.data[0]
-	return found ? ok(found) : fail({ code: 404, error: "Script not found." })
+	return found
+		? ok({ ...found, requires_host: checked.data?.requires_host ?? null })
+		: fail({ code: 404, error: "Script not found." })
 }
 
 export function manifestReply(rows: { revision: number; manifest: Json | null }[] | null) {
