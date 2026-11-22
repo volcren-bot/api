@@ -25,16 +25,14 @@ export type Problem = {
 	message: string
 }
 
-export interface LibRelease {
+export interface Release {
 	version: string
-	requires_host: number
-	path: string
-	sha256: string
+	build: number
+	sdk: { path: string; sha256: string }
 }
 
 export interface CheckResult {
-	lib: string
-	host: number
+	injector: string
 	problems: Problem[]
 }
 
@@ -101,49 +99,53 @@ function analyzerPath() {
 	return analyzer
 }
 
-export function parseIndex(value: unknown): LibRelease {
-	const versions = (value as { versions?: unknown })?.versions
-	const newest = Array.isArray(versions) ? (versions[0] as Partial<LibRelease>) : null
+const SAFE_PATH = (path: unknown) =>
+	typeof path === "string" &&
+	path !== "" &&
+	path.split("/").every((part) => part !== "" && part !== "..")
+
+export function parseRelease(value: unknown): Release {
+	const release = value as Partial<Release> | null
 	if (
-		!newest ||
-		typeof newest.version !== "string" ||
-		!/^[0-9A-Za-z.-]{1,64}$/.test(newest.version) ||
-		!Number.isInteger(newest.requires_host) ||
-		typeof newest.path !== "string" ||
-		newest.path.split("/").some((part) => part === "" || part === "..") ||
-		typeof newest.sha256 !== "string"
+		!release ||
+		typeof release.version !== "string" ||
+		!/^[0-9A-Za-z.-]{1,64}$/.test(release.version) ||
+		!Number.isSafeInteger(release.build) ||
+		(release.build as number) <= 0 ||
+		!SAFE_PATH(release.sdk?.path) ||
+		typeof release.sdk?.sha256 !== "string" ||
+		!/^[0-9a-fA-F]{64}$/.test(release.sdk.sha256)
 	)
-		throw new Error("the lib index has no usable newest release")
-	return newest as LibRelease
+		throw new Error("latest.json has no usable release with an SDK")
+	return { version: release.version, build: release.build as number, sdk: release.sdk }
 }
 
-export async function newestLib() {
-	const bytes = await bucketFile("client", "lib/index.json")
-	return parseIndex(JSON.parse(new TextDecoder().decode(bytes)))
+export async function newestRelease() {
+	const bytes = await bucketFile("client", "latest.json")
+	return parseRelease(JSON.parse(new TextDecoder().decode(bytes)))
 }
 
-const libs = new Map<string, Promise<string>>()
+const sdks = new Map<string, Promise<string>>()
 
-function libDir(release: LibRelease) {
-	let dir = libs.get(release.version)
+function sdkDir(release: Release) {
+	let dir = sdks.get(release.version)
 	if (!dir) {
 		dir = (async () => {
-			const final = join(root(), "lib", release.version)
+			const final = join(root(), "sdk", release.version)
 			if (await Bun.file(join(final, ".luaurc")).exists()) return final
-			const archive = await bucketFile("client", release.path)
-			if (sha256(archive) !== release.sha256.toLowerCase())
-				throw new Error(`lib ${release.version} doesn't match its checksum`)
+			const archive = await bucketFile("client", release.sdk.path)
+			if (sha256(archive) !== release.sdk.sha256.toLowerCase())
+				throw new Error(`the SDK of ${release.version} doesn't match its checksum`)
 			const entries = unzip(archive, MAX_ARCHIVE_BYTES)
-			await install(final, async (staging) => {
-				await writeTree(staging, entries)
-				await writeFile(join(staging, ".luaurc"), JSON.stringify({ aliases: { lib: "./" } }))
-			})
+			if (!entries.some((entry) => entry.name === ".luaurc"))
+				throw new Error(`the SDK of ${release.version} has no .luaurc`)
+			await install(final, (staging) => writeTree(staging, entries))
 			return final
 		})().catch((error) => {
-			libs.delete(release.version)
+			sdks.delete(release.version)
 			throw error
 		})
-		libs.set(release.version, dir)
+		sdks.set(release.version, dir)
 	}
 	return dir
 }
@@ -271,7 +273,7 @@ async function readCapped(stream: ReadableStream<Uint8Array>) {
 	return new TextDecoder().decode(Buffer.concat(chunks))
 }
 
-async function analyze(lib: string, sources: SourceFile[]): Promise<Problem[]> {
+async function analyze(sdk: string, sources: SourceFile[]): Promise<Problem[]> {
 	if (!sources.length)
 		return [{ file: "", line: 1, column: 1, message: "The revision has no .luau file." }]
 	const bin = await analyzerPath()
@@ -282,7 +284,10 @@ async function analyze(lib: string, sources: SourceFile[]): Promise<Problem[]> {
 			runDir,
 			sources.map((source) => ({ name: source.name, bytes: source.text }))
 		)
-		await writeFile(join(runDir, ".luaurc"), JSON.stringify({ aliases: { lib: `${lib}/` } }))
+		await writeFile(
+			join(runDir, ".luaurc"),
+			JSON.stringify({ aliases: { volcren: join(sdk, "modules") } })
+		)
 		const names = sources.map((source) => source.name)
 		const child = Bun.spawn([bin, "--mode=strict", ...names], {
 			cwd: runDir,
@@ -319,7 +324,7 @@ function serially<T>(task: () => Promise<T>): Promise<T> {
 export function checkRevision(
 	scriptId: string,
 	revision: number,
-	release?: LibRelease
+	given?: Release
 ): Promise<CheckResult> {
 	return serially(async () => {
 		const { data: version, error } = await scripts
@@ -330,20 +335,25 @@ export function checkRevision(
 			.single()
 		if (error)
 			throw new Error(`couldn't read revision ${revision} of ${scriptId}: ${error.message}`)
-		const lib = release ?? (await newestLib())
+		const release = given ?? (await newestRelease())
+		const { error: registerErr } = await scripts.rpc("register_injector", {
+			p_version: release.version,
+			p_build: release.build
+		})
+		if (registerErr)
+			throw new Error(`couldn't register injector ${release.version}: ${registerErr.message}`)
 		const [dir, sources] = await Promise.all([
-			libDir(lib),
+			sdkDir(release),
 			revisionSources(scriptId, revision, version.files)
 		])
 		const problems = capProblems(await analyze(dir, sources))
 		const { error: recordErr } = await scripts.rpc("record_check", {
 			p_script: scriptId,
 			p_revision: revision,
-			p_lib: lib.version,
-			p_host: lib.requires_host,
+			p_injector: release.version,
 			p_problems: problems.length ? problems : null
 		})
 		if (recordErr) throw new Error(`couldn't record the check: ${recordErr.message}`)
-		return { lib: lib.version, host: lib.requires_host, problems }
+		return { injector: release.version, problems }
 	})
 }

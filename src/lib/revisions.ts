@@ -55,7 +55,11 @@ export async function checkUpload(header: string | undefined, scriptId: string, 
 
 	try {
 		const result = await checkRevision(scriptId, revision)
-		return ok({ passed: result.problems.length === 0, lib: result.lib, problems: result.problems })
+		return ok({
+			passed: result.problems.length === 0,
+			injector: result.injector,
+			problems: result.problems
+		})
 	} catch (e) {
 		return fail({ code: 502, error: logError("The script check couldn't run.", e) })
 	}

@@ -173,6 +173,12 @@ export function mapStartError(error: { code?: string; message?: string }): Failu
 		return { code: 402, error: "Not enough credits to start this script." }
 	if (error.message?.includes("no live revision"))
 		return { code: 409, error: "This script has no live revision yet." }
+	if (error.code === "55000")
+		return {
+			code: 409,
+			error:
+				"This script's live revision runs on an injector that is no longer supported. Its author needs to publish it again."
+		}
 	return internalError("Failed to start the session.", error)
 }
 
@@ -264,6 +270,7 @@ export async function startSession(caller: Caller, scriptId: string) {
 		price: price?.price ?? 0,
 		rank: started.rank,
 		fee: started.fee,
+		injector: started.injector,
 		entry: started.entry,
 		files: started.files.map((name, i) => ({ name, url: signed[i].signedUrl })),
 		key: keyRow ? hexKey(keyRow.key) : null,
@@ -293,8 +300,7 @@ async function withRequired(userId: string, scriptId: string, failure: Failure):
 	return { ...mapStartError({ code: "23514" }), required }
 }
 
-/** `quote` for the launcher, which may only ask about scripts the account can see. */
-async function liveRequiredHost(scriptId: string) {
+async function liveInjector(scriptId: string) {
 	const { data: live, error } = await scripts
 		.from("protected")
 		.select("revision")
@@ -303,7 +309,7 @@ async function liveRequiredHost(scriptId: string) {
 	if (error) return { data: null, error }
 	return scripts
 		.from("versions")
-		.select("requires_host")
+		.select("injector")
 		.eq("id", scriptId)
 		.eq("revision", live.revision)
 		.maybeSingle()
@@ -313,7 +319,7 @@ export async function quoteScript(caller: Caller, scriptId: string) {
 	const [visible, quoted, checked] = await Promise.all([
 		canView(caller.id, scriptId),
 		quote(caller.id, scriptId),
-		liveRequiredHost(scriptId)
+		liveInjector(scriptId)
 	])
 	if (visible.error) return serverError("Failed to check the script.", visible.error)
 	if (visible.data !== true) return fail({ code: 404, error: "Script not found." })
@@ -321,7 +327,7 @@ export async function quoteScript(caller: Caller, scriptId: string) {
 	if (checked.error) return serverError("Failed to read the live revision.", checked.error)
 	const found = quoted.data[0]
 	return found
-		? ok({ ...found, requires_host: checked.data?.requires_host ?? null })
+		? ok({ ...found, injector: checked.data?.injector ?? null })
 		: fail({ code: 404, error: "Script not found." })
 }
 

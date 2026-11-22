@@ -72,28 +72,38 @@ describe("unzip", () => {
 	})
 })
 
-describe("parseIndex", () => {
+describe("parseRelease", () => {
 	const release = {
-		version: "2026.11.15-94c0030",
-		requires_host: 22,
-		path: "lib/lib-2026.11.15-94c0030.zip",
-		sha256: "ab"
+		version: "2026.11.22-94c0030",
+		build: 1795000000,
+		api_version: 3,
+		files: {},
+		sdk: {
+			name: "sdk-2026.11.22-94c0030.zip",
+			path: "2026.11.22-94c0030/sdk-2026.11.22-94c0030.zip",
+			sha256: "ab".repeat(32)
+		}
 	}
 
-	test("takes the first, newest release", () => {
-		expect(checker.parseIndex({ versions: [release, { ...release, version: "old" }] })).toEqual(
-			release
-		)
+	test("takes the release and its SDK from latest.json", () => {
+		expect(checker.parseRelease(release)).toEqual({
+			version: release.version,
+			build: release.build,
+			sdk: release.sdk
+		})
 	})
 
 	test("refuses a release it can't use safely", () => {
-		expect(() => checker.parseIndex({ versions: [] })).toThrow()
+		expect(() => checker.parseRelease(null)).toThrow()
+		expect(() => checker.parseRelease({ ...release, sdk: undefined })).toThrow()
 		expect(() =>
-			checker.parseIndex({ versions: [{ ...release, path: "lib/../secret" }] })
+			checker.parseRelease({ ...release, sdk: { ...release.sdk, path: "../secret.zip" } })
 		).toThrow()
 		expect(() =>
-			checker.parseIndex({ versions: [{ ...release, version: "a,checked_lib.eq.b" }] })
+			checker.parseRelease({ ...release, sdk: { ...release.sdk, sha256: "ab" } })
 		).toThrow()
+		expect(() => checker.parseRelease({ ...release, version: "a,checked_injector.eq.b" })).toThrow()
+		expect(() => checker.parseRelease({ ...release, build: 0 })).toThrow()
 	})
 })
 

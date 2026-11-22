@@ -21,7 +21,7 @@ bun run dev              # http://localhost:3000
 | `bun run lint`     | Prettier and ESLint.                           |
 | `bun run gentypes` | Regenerate `src/lib/types/supabase.ts`.        |
 
-Optional: `HOST`, `PORT`, and `CHECKER_DIR` (where the script checker keeps `luau-analyze`, unpacked libs and its temporary runs; defaults to the system temp folder).
+Optional: `HOST`, `PORT`, and `CHECKER_DIR` (where the script checker keeps `luau-analyze`, unpacked SDKs and its temporary runs; defaults to the system temp folder).
 
 ## Contract
 
@@ -40,25 +40,25 @@ Every endpoint except `GET /` takes `Authorization: Bearer <supabase access toke
 | 429    | Rate limited. `Retry-After` is in seconds.                                              |
 | 502    | The script files couldn't be prepared. The session was ended, not billed.               |
 
-| Endpoint                                        | Returns                                                                                                                                                                     |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /`                                         | `{ api_version }`. Public.                                                                                                                                                  |
-| `GET /launcher/me`                              | `{ username, avatar_url, role, microcredits, min_balance_minutes, open_sessions, extra_session_fee, minutes_per_month, api_version }`                                       |
-| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, queueable, cover_url, can_access, community, granted, author, online }] }`            |
-| `GET /launcher/scripts/:id/manifest`            | `{ revision, manifest }`. The live revision's `manifest.json`, or `null`. See Manifests.                                                                                    |
-| `GET /launcher/scripts/:id/quote`               | `{ price, rank, fee, required, requires_host }`. What starting the script would cost the account now. See Sessions and Script checks.                                       |
-| `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                                                  |
-| `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                                                |
-| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, rank, fee, entry, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. See Sessions.               |
-| `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, microcredits, charged_until, rank, fee, fee_charged, stats?: { accepted, reason? } }`         |
-| `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                                              |
-| `GET /launcher/sessions`                        | `{ sessions: [{ session_id, script_id, title, url, revision, started_at, ended_at, score, reports }] }`. The last 24 hours. See Feedback.                                   |
-| `POST /launcher/sessions/:id/score`             | Body `{ score }` (1 to 10). `{ score }`.                                                                                                                                    |
-| `POST /launcher/sessions/:id/report`            | Body `{ description, log?, snapshot?, diagnostics? }`. `{ report_id }`.                                                                                                     |
-| `POST /launcher/agent-sessions`                 | Body `{}`. `{ id, heartbeat_seconds }`. Free. See Agent sessions.                                                                                                           |
-| `POST /launcher/agent-sessions/:id/heartbeat`   | Body `{}`. `{ ended }`.                                                                                                                                                     |
-| `POST /launcher/agent-sessions/:id/end`         | Body `{}`. `{ ended: true }`. Safe to repeat.                                                                                                                               |
-| `POST /scripts/:id/revisions/:revision/check`   | No body. `{ passed, lib, problems: [{ file, line, column, message }] }`. Takes the author's or a moderator's access token, or the script's deploy token. See Script checks. |
+| Endpoint                                        | Returns                                                                                                                                                                            |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /`                                         | `{ api_version }`. Public.                                                                                                                                                         |
+| `GET /launcher/me`                              | `{ username, avatar_url, role, microcredits, min_balance_minutes, open_sessions, extra_session_fee, minutes_per_month, api_version }`                                              |
+| `GET /launcher/scripts?q=&category=&community=` | `{ scripts: [{ id, url, title, description, categories, stage, type, price, revision, queueable, cover_url, can_access, community, granted, author, online }] }`                   |
+| `GET /launcher/scripts/:id/manifest`            | `{ revision, manifest }`. The live revision's `manifest.json`, or `null`. See Manifests.                                                                                           |
+| `GET /launcher/scripts/:id/quote`               | `{ price, rank, fee, required, injector }`. What starting the script would cost the account now, and the client release its live revision runs on. See Sessions and Script checks. |
+| `POST /launcher/scripts/redeem`                 | Body `{ code }`. `{ script_id, url }`, or an error with a `reason`. See Community scripts.                                                                                         |
+| `DELETE /launcher/scripts/:id/grant`            | `{ removed: true }`. Takes a granted script off the account.                                                                                                                       |
+| `POST /launcher/sessions`                       | Body `{ script_id }`. `{ session_id, revision, price, rank, fee, injector, entry, files: [{ name, url }], key, heartbeat_seconds }`. URLs expire in 60 s. See Sessions.            |
+| `POST /launcher/sessions/:id/heartbeat`         | Body `{ stats?: { experience, gold, minutes, custom? } }`. `{ alive, reason?, microcredits, charged_until, rank, fee, fee_charged, stats?: { accepted, reason? } }`                |
+| `POST /launcher/sessions/:id/end`               | `{ charged }`. Safe to repeat.                                                                                                                                                     |
+| `GET /launcher/sessions`                        | `{ sessions: [{ session_id, script_id, title, url, revision, started_at, ended_at, score, reports }] }`. The last 24 hours. See Feedback.                                          |
+| `POST /launcher/sessions/:id/score`             | Body `{ score }` (1 to 10). `{ score }`.                                                                                                                                           |
+| `POST /launcher/sessions/:id/report`            | Body `{ description, log?, snapshot?, diagnostics? }`. `{ report_id }`.                                                                                                            |
+| `POST /launcher/agent-sessions`                 | Body `{}`. `{ id, heartbeat_seconds }`. Free. See Agent sessions.                                                                                                                  |
+| `POST /launcher/agent-sessions/:id/heartbeat`   | Body `{}`. `{ ended }`.                                                                                                                                                            |
+| `POST /launcher/agent-sessions/:id/end`         | Body `{}`. `{ ended: true }`. Safe to repeat.                                                                                                                                      |
+| `POST /scripts/:id/revisions/:revision/check`   | No body. `{ passed, injector, problems: [{ file, line, column, message }] }`. Takes the author's or a moderator's access token, or the script's deploy token. See Script checks.   |
 
 ### Community scripts and share codes
 
@@ -84,12 +84,12 @@ An account can have any number of sessions open, but every one past the oldest p
 
 ### Script checks
 
-Every revision is type-checked against the newest lib before it can go live, and every live revision again whenever a newer lib is published. The check decrypts the revision's `.luau` files in memory, writes them to a temporary folder next to the unpacked lib, and runs `luau-analyze --mode=strict` with a 60 s limit, one check at a time. Type and syntax errors in the revision's own files count, and so does a file that doesn't start with `--!strict`; lint warnings don't. The result goes to the database through `record_check`, which `publish_version` requires, and a live revision that fails marks its script broken: only its author and moderators see it until a fixed revision goes live.
+Every revision is type-checked against the SDK of the newest client release before it can go live, and every live revision that auto-forwards again whenever a newer release is published. The release is `latest.json` in the public `client` bucket: its `version` and `build` name the injector (registered through `register_injector` before the check) and its `sdk` the zip the check unpacks. The check decrypts the revision's `.luau` files in memory, writes them to a temporary folder whose `.luaurc` points `@volcren` at the SDK's modules, and runs `luau-analyze --mode=strict` with a 60 s limit, one check at a time. Type and syntax errors in the revision's own files count, and so does a file that doesn't start with `--!strict`; lint warnings don't. The result goes to the database through `record_check`, which `publish_version` requires. Publishing pins the revision to the release it passed, and the loader runs it with that release's `injector.exe`.
 
 - **On upload**, the webapp calls `POST /scripts/:id/revisions/:revision/check` between uploading the files and publishing. `passed: false` means `publish_version` will refuse the revision; `502` means the check couldn't run and nothing was recorded.
-- **On a new lib**, the API reads `lib/index.json` from the public `client` bucket every 5 minutes and checks each live revision whose `checked_lib` isn't the newest release, oldest check first, 200 a pass. It runs only when `NODE_ENV` isn't `development`.
-- **The loader** compares `requires_host` from the quote, the host API of the lib the live revision passed when it was published, with its own `HOST_API`, and refuses to start a revision published against a lib it can't run. Sweeps don't change it, so a newer lib doesn't lock older loaders out of revisions that ran on theirs.
-- `luau-analyze` is the official luau-lang release `LUAU_VERSION` in `src/lib/checker.ts`, downloaded once and verified against its pinned sha256. Keep it on the version in `lib/mise.toml` and the client's `release.yml`, so the API checks scripts the way the lib's CI and the loader do.
+- **On a new release**, the API reads `latest.json` every 5 minutes and checks each live revision whose `checked_injector` isn't the newest release and whose manifest doesn't turn `auto_forward` off, oldest check first, 200 a pass. A pass moves the revision's pin to the new release; a failure leaves it running on its pin. It runs only when `NODE_ENV` isn't `development`.
+- **Unsupported revisions**: a revision without a pin, or pinned to a release retired with `scripts.retire_injector`, marks its script broken, and `POST /launcher/sessions` refuses it with `409` until a new revision goes live.
+- `luau-analyze` is the official luau-lang release `LUAU_VERSION` in `src/lib/checker.ts`, downloaded once and verified against its pinned sha256. Keep it on the version in the client's `sdk/luau/mise.toml` and `release.yml`, so the API checks scripts the way the SDK's lint and the loader do.
 
 ### Agent sessions
 
@@ -116,8 +116,8 @@ Scores and bug reports are internal: the script's author sees score aggregates a
 | `src/lib/auth.ts`       | Token check, ban check, and the `auth: true` route macro that gives handlers the `caller`.                |
 | `src/lib/request.ts`    | Client IP, rate and body limits, error refs, and the `Outcome` a lib function hands its route to `reply`. |
 | `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, agent sessions, stats, feedback.                 |
-| `src/lib/checker.ts`    | The script check: `luau-analyze`, lib download, revision decryption, diagnostics.                         |
-| `src/lib/sweep.ts`      | The periodic check of live revisions against a newer lib.                                                 |
+| `src/lib/checker.ts`    | The script check: `luau-analyze`, SDK download, revision decryption, diagnostics.                         |
+| `src/lib/sweep.ts`      | The periodic check of live revisions against a newer release, which moves their pins.                     |
 | `src/lib/supabase.ts`   | Admin, anon and per-user clients.                                                                         |
 | `src/lib/validation.ts` | Runtime a report can claim.                                                                               |
 | `src/lib/types/`        | Generated database types and request schemas.                                                             |

@@ -676,6 +676,7 @@ export type Database = {
           entry: string
           fee: number
           files: string[]
+          injector: string
           rank: number
           revision: number
           session_id: string
@@ -1060,6 +1061,28 @@ export type Database = {
           },
         ]
       }
+      injectors: {
+        Row: {
+          build: number
+          created_at: string
+          retired_at: string | null
+          version: string
+        }
+        ComputedFields: never
+        Insert: {
+          build: number
+          created_at?: string
+          retired_at?: string | null
+          version: string
+        }
+        Update: {
+          build?: number
+          created_at?: string
+          retired_at?: string | null
+          version?: string
+        }
+        Relationships: []
+      }
       metadata: {
         Row: {
           categories: Database["scripts"]["Enums"]["category"][]
@@ -1276,59 +1299,68 @@ export type Database = {
       versions: {
         Row: {
           checked_at: string | null
-          checked_host: number | null
-          checked_lib: string | null
+          checked_injector: string | null
           created_at: string
           entry: string
           files: string[]
           id: string
+          injector: string | null
           manifest: Json | null
           problems: Json | null
           published_at: string | null
           revision: number
-          requires_host: number | null
           sizes: number[]
           status: Database["scripts"]["Enums"]["version_status"]
         }
         ComputedFields: never
         Insert: {
           checked_at?: string | null
-          checked_host?: number | null
-          checked_lib?: string | null
+          checked_injector?: string | null
           created_at?: string
           entry: string
           files: string[]
           id: string
+          injector?: string | null
           manifest?: Json | null
           problems?: Json | null
           published_at?: string | null
           revision: number
-          requires_host?: number | null
           sizes?: number[]
           status?: Database["scripts"]["Enums"]["version_status"]
         }
         Update: {
           checked_at?: string | null
-          checked_host?: number | null
-          checked_lib?: string | null
+          checked_injector?: string | null
           created_at?: string
           entry?: string
           files?: string[]
           id?: string
+          injector?: string | null
           manifest?: Json | null
           problems?: Json | null
           published_at?: string | null
           revision?: number
-          requires_host?: number | null
           sizes?: number[]
           status?: Database["scripts"]["Enums"]["version_status"]
         }
         Relationships: [
           {
+            foreignKeyName: "versions_checked_injector_fkey"
+            columns: ["checked_injector"]
+            referencedRelation: "injectors"
+            referencedColumns: ["version"]
+          },
+          {
             foreignKeyName: "versions_id_fkey"
             columns: ["id"]
             referencedRelation: "scripts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "versions_injector_fkey"
+            columns: ["injector"]
+            referencedRelation: "injectors"
+            referencedColumns: ["version"]
           },
         ]
       }
@@ -1464,8 +1496,7 @@ export type Database = {
       }
       record_check: {
         Args: {
-          p_host: number
-          p_lib: string
+          p_injector: string
           p_problems: Json
           p_revision: number
           p_script: string
@@ -1480,6 +1511,11 @@ export type Database = {
           url: string
         }[]
       }
+      register_injector: {
+        Args: { p_build: number; p_version: string }
+        Returns: undefined
+      }
+      retire_injector: { Args: { p_version: string }; Returns: number }
       safe_uuid: { Args: { value: string }; Returns: string }
       set_version_key: {
         Args: { key: string; revision: number; script_id: string }
