@@ -2394,6 +2394,7 @@ export type Database = {
           response_status: number | null
           status: Database["webhooks"]["Enums"]["delivery_status"]
         }
+        ComputedFields: never
         Insert: {
           attempts?: number
           created_at?: string
@@ -2420,12 +2421,10 @@ export type Database = {
           response_status?: number | null
           status?: Database["webhooks"]["Enums"]["delivery_status"]
         }
-        ComputedFields: never
         Relationships: [
           {
             foreignKeyName: "deliveries_endpoint_id_fkey"
             columns: ["endpoint_id"]
-            isOneToOne: false
             referencedRelation: "endpoints"
             referencedColumns: ["id"]
           },
@@ -2450,6 +2449,7 @@ export type Database = {
           url: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           bearer_token?: string | null
           created_at?: string
@@ -2486,7 +2486,6 @@ export type Database = {
           url?: string
           user_id?: string
         }
-        ComputedFields: never
         Relationships: []
       }
     }
