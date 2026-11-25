@@ -2378,6 +2378,191 @@ export type Database = {
       [_ in never]: never
     }
   }
+  webhooks: {
+    Tables: {
+      deliveries: {
+        Row: {
+          attempts: number
+          created_at: string
+          endpoint_id: string
+          error: string | null
+          event: Database["webhooks"]["Enums"]["event"]
+          finished_at: string | null
+          id: string
+          next_attempt_at: string
+          payload: NonNullable<Json>
+          response_status: number | null
+          status: Database["webhooks"]["Enums"]["delivery_status"]
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          endpoint_id: string
+          error?: string | null
+          event: Database["webhooks"]["Enums"]["event"]
+          finished_at?: string | null
+          id?: string
+          next_attempt_at?: string
+          payload: NonNullable<Json>
+          response_status?: number | null
+          status?: Database["webhooks"]["Enums"]["delivery_status"]
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          endpoint_id?: string
+          error?: string | null
+          event?: Database["webhooks"]["Enums"]["event"]
+          finished_at?: string | null
+          id?: string
+          next_attempt_at?: string
+          payload?: NonNullable<Json>
+          response_status?: number | null
+          status?: Database["webhooks"]["Enums"]["delivery_status"]
+        }
+        ComputedFields: never
+        Relationships: [
+          {
+            foreignKeyName: "deliveries_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      endpoints: {
+        Row: {
+          bearer_token: string | null
+          created_at: string
+          disabled_reason: string | null
+          enabled: boolean
+          events: Database["webhooks"]["Enums"]["event"][]
+          failures: number
+          format: Database["webhooks"]["Enums"]["format"]
+          has_bearer: boolean | null
+          header_names: string[]
+          header_values: string[]
+          id: string
+          name: string
+          signing_secret: string
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          bearer_token?: string | null
+          created_at?: string
+          disabled_reason?: string | null
+          enabled?: boolean
+          events: Database["webhooks"]["Enums"]["event"][]
+          failures?: number
+          format?: Database["webhooks"]["Enums"]["format"]
+          has_bearer?: never
+          header_names?: string[]
+          header_values?: string[]
+          id?: string
+          name: string
+          signing_secret?: string
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          bearer_token?: string | null
+          created_at?: string
+          disabled_reason?: string | null
+          enabled?: boolean
+          events?: Database["webhooks"]["Enums"]["event"][]
+          failures?: number
+          format?: Database["webhooks"]["Enums"]["format"]
+          has_bearer?: never
+          header_names?: string[]
+          header_values?: string[]
+          id?: string
+          name?: string
+          signing_secret?: string
+          updated_at?: string
+          url?: string
+          user_id?: string
+        }
+        ComputedFields: never
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      can_use: { Args: { p_user: string }; Returns: boolean }
+      claim_deliveries: {
+        Args: { p_limit: number }
+        Returns: {
+          attempts: number
+          bearer_token: string
+          created_at: string
+          event: Database["webhooks"]["Enums"]["event"]
+          format: Database["webhooks"]["Enums"]["format"]
+          header_names: string[]
+          header_values: string[]
+          id: string
+          payload: Json
+          signing_secret: string
+          url: string
+        }[]
+      }
+      delete_old_deliveries: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      enqueue: {
+        Args: {
+          p_event: Database["webhooks"]["Enums"]["event"]
+          p_payload: Json
+          p_user?: string
+        }
+        Returns: number
+      }
+      finish_delivery: {
+        Args: {
+          p_error: string
+          p_id: string
+          p_retry: boolean
+          p_status: number
+        }
+        Returns: undefined
+      }
+      rotate_signing_secret: { Args: { p_id: string }; Returns: string }
+      save_endpoint: {
+        Args: {
+          p_bearer_token: string
+          p_enabled: boolean
+          p_events: Database["webhooks"]["Enums"]["event"][]
+          p_format: Database["webhooks"]["Enums"]["format"]
+          p_headers: Json
+          p_id: string
+          p_name: string
+          p_url: string
+        }
+        Returns: string
+      }
+      send_test: { Args: { p_id: string }; Returns: string }
+      valid_header: { Args: { name: string; value: string }; Returns: boolean }
+      valid_headers: {
+        Args: { names: string[]; vals: string[] }
+        Returns: boolean
+      }
+      valid_url: { Args: { url: string }; Returns: boolean }
+    }
+    Enums: {
+      delivery_status: "pending" | "delivered" | "failed"
+      event: "client_release" | "script_check" | "ping"
+      format: "volcren" | "github_dispatch" | "text" | "discord"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
 }
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
@@ -2575,6 +2760,13 @@ export const Constants = {
   storage: {
     Enums: {
       buckettype: ["STANDARD", "ANALYTICS", "VECTOR"],
+    },
+  },
+  webhooks: {
+    Enums: {
+      delivery_status: ["pending", "delivered", "failed"],
+      event: ["client_release", "script_check", "ping"],
+      format: ["volcren", "github_dispatch", "text", "discord"],
     },
   },
 } as const

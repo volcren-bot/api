@@ -4,6 +4,7 @@ import { bodyTooLarge, getClientIP, REPORT_BODY_BYTES } from "$lib/request"
 import openapi from "@elysiajs/openapi"
 import { autoload } from "elysia-autoload"
 import { startSweeps } from "$lib/sweep"
+import { startDeliveries } from "$lib/webhooks"
 
 console.log(`volcren-api is starting...`)
 
@@ -130,7 +131,10 @@ app.listen({
 
 export type ElysiaApp = typeof app
 
-if (process.env.NODE_ENV !== "development") startSweeps()
+if (process.env.NODE_ENV !== "development") {
+	startSweeps()
+	startDeliveries()
+}
 
 console.log(`🔥 volcren-api is running at ${app.server!.url}`)
 console.log(`📚 Documentation live at ${app.server!.url}docs`)

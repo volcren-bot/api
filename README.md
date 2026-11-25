@@ -107,6 +107,16 @@ Scores and bug reports are internal: the script's author sees score aggregates a
 
 `POST /launcher/sessions/:id/score` keeps one score per account per script: scoring again replaces it and records the session. `POST /launcher/sessions/:id/report` takes an optional `description` (2000 characters), the script's `log` (256 KiB, the loader sends the tail; an empty log is stored as none), a game state `snapshot` (48 KiB as JSON) and `diagnostics` (12 KiB as JSON: versions, and system info when the user allows it). The API refuses bodies over 64 KiB by `Content-Length` except on the report endpoint, which takes up to 512 KiB, Bun's limit for the whole server. The database caps every column again, keeps 5 reports an hour per account and clears the attachments after 90 days. Errors: `404` not the caller's session, `410` older than 24 hours, `413` an attachment over its limit, `429` too fast or 5 reports in the hour.
 
+### Webhooks
+
+Contributor+ accounts add up to 5 webhooks on the website, and the API sends them what the database queues (see the database notes): `client_release` when a newly published release is registered, `script_check` when the check of one of their live revisions against a newer release finishes, and `ping` from the website's test button. Every 15 s the API claims up to 20 due deliveries at a time and POSTs each one, with one retry schedule and one auto-disable rule for everyone, both kept in the database. It runs only when `NODE_ENV` isn't `development`.
+
+- **Body**, by the webhook's format. `volcren`: `{ id, event, created_at, data }`. `github_dispatch`: `{ event_type: "volcren.<event>", client_payload: <the volcren body> }`, so the URL can be GitHub's `repository_dispatch` endpoint with a fine-grained token as the bearer. `text`: `{ text }`, one sentence, for Slack-style and Claude routine endpoints. `discord`: `{ content, allowed_mentions: { parse: [] } }`, so a script title can't ping anyone.
+- **Data**. `client_release`: `{ version, build, released_at, latest_url }`; `latest_url` is the public `latest.json`, whose `sdk` entry names the zip and its sha256. `script_check`: `{ script_id, title, url, revision, checked_injector, injector, passed, problem_count, problems }`, where `injector` is the release the revision runs on after the check and `problems` holds the first 10. `ping`: `{}`.
+- **Headers**: `Content-Type: application/json`, `X-Volcren-Event`, `X-Volcren-Delivery` (the delivery id, the same on every retry, so receivers can drop duplicates), `X-Volcren-Timestamp` (Unix seconds) and `X-Volcren-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<body>" under the webhook's signing secret>`, then `Authorization: Bearer <token>` when one is set and the custom headers.
+- **Outcome**: a 2xx delivers; 408, 425, 429, 5xx, timeouts (10 s) and connection or DNS failures are retried; any other answer, including a redirect, which is never followed, fails at once.
+- **SSRF**: the URL must be https with a host name. The API resolves it, refuses it if any address is private, loopback, link-local, CGNAT, multicast or reserved (IPv4-mapped and NAT64 forms included), and connects to the address it checked, with the host name as SNI and certificate name, so DNS can't be rebound between the check and the request. It re-checks the custom headers against the database's rules before sending.
+
 ## Layout
 
 | Path                    | Contents                                                                                                  |
@@ -118,6 +128,7 @@ Scores and bug reports are internal: the script's author sees score aggregates a
 | `src/lib/launcher.ts`   | What the endpoints do: account, store listing, sessions, agent sessions, stats, feedback.                 |
 | `src/lib/checker.ts`    | The script check: `luau-analyze`, SDK download, revision decryption, diagnostics.                         |
 | `src/lib/sweep.ts`      | The periodic check of live revisions against a newer release, which moves their pins.                     |
+| `src/lib/webhooks.ts`   | Webhook delivery: SSRF guard, body formats, signatures and the delivery loop.                             |
 | `src/lib/supabase.ts`   | Admin, anon and per-user clients.                                                                         |
 | `src/lib/validation.ts` | Runtime a report can claim.                                                                               |
 | `src/lib/types/`        | Generated database types and request schemas.                                                             |
