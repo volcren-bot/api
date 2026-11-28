@@ -785,7 +785,12 @@ export type Database = {
     }
     Enums: {
       credit_kind:
-        "topup" | "usage" | "transfer" | "refund" | "adjustment" | "referral"
+        | "topup"
+        | "usage"
+        | "transfer"
+        | "refund"
+        | "adjustment"
+        | "referral"
       earning_kind: "sale" | "transfer" | "withdrawal" | "adjustment"
       payment_status: "pending" | "paid" | "expired" | "invalid"
       provider: "bitcart" | "stripe" | "molly"
@@ -851,9 +856,9 @@ export type Database = {
         Row: {
           avatar: string
           banned_at: string | null
-          referral_code: string
           created_at: string
           id: string
+          referral_code: string
           role: Database["profiles"]["Enums"]["roles"]
           username: string
         }
@@ -861,18 +866,18 @@ export type Database = {
         Insert: {
           avatar?: string
           banned_at?: string | null
-          referral_code?: string
           created_at?: string
           id: string
+          referral_code?: string
           role?: Database["profiles"]["Enums"]["roles"]
           username: string
         }
         Update: {
           avatar?: string
           banned_at?: string | null
-          referral_code?: string
           created_at?: string
           id?: string
+          referral_code?: string
           role?: Database["profiles"]["Enums"]["roles"]
           username?: string
         }
