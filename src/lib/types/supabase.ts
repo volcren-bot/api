@@ -1476,6 +1476,13 @@ export type Database = {
           revision: number
         }[]
       }
+      live_revisions_to_check: {
+        Args: { p_injector: string; p_limit: number }
+        Returns: {
+          id: string
+          revision: number
+        }[]
+      }
       max_stage: {
         Args: {
           script_id: string

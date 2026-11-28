@@ -12,14 +12,10 @@ export async function sweep() {
 	running = true
 	try {
 		const release = await newestRelease()
-		const { data: stale, error } = await scripts
-			.from("versions")
-			.select("id, revision")
-			.eq("status", "live")
-			.or(`checked_injector.is.null,checked_injector.neq.${release.version}`)
-			.or("manifest->>auto_forward.is.null,manifest->>auto_forward.neq.false")
-			.order("checked_at", { ascending: true, nullsFirst: true })
-			.limit(PAGE)
+		const { data: stale, error } = await scripts.rpc("live_revisions_to_check", {
+			p_injector: release.version,
+			p_limit: PAGE
+		})
 		if (error) throw error
 		let failed = 0
 		for (const { id, revision } of stale) {
