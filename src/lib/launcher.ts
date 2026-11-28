@@ -44,6 +44,8 @@ async function getMicrocredits(userId: string) {
 }
 
 export async function getMe(caller: Caller) {
+	const gift = await payments.rpc("grant_referral_gift", { p_user: caller.id })
+	if (gift.error) logError("Failed to grant the referral gift.", gift.error)
 	const [config, microcredits, open] = await Promise.all([
 		payments.from("config").select("min_balance_minutes, extra_session_fee").single(),
 		getMicrocredits(caller.id),

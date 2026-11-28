@@ -117,6 +117,10 @@ Contributor+ accounts add up to 5 webhooks on the website, and the API sends the
 - **Outcome**: a 2xx delivers; 408, 425, 429, 5xx, timeouts (10 s) and connection or DNS failures are retried; any other answer, including a redirect, which is never followed, fails at once.
 - **SSRF**: the URL must be https with a host name. The API resolves it, refuses it if any address is private, loopback, link-local, CGNAT, multicast or reserved (IPv4-mapped and NAT64 forms included), and connects to the address it checked, with the host name as SNI and certificate name, so DNS can't be rebound between the check and the request. It re-checks the custom headers against the database's rules before sending.
 
+### Referrals
+
+`GET /launcher/me` first grants the account its referral gift through `payments.grant_referral_gift`, so a referred account gets it at its first loader sign-in and `microcredits` already includes it. The database pays it once and only to an eligible referral; if the call fails, the answer is still sent and the next `GET /launcher/me` tries again. Every other referral reward is paid by the database itself when sessions end and payments settle.
+
 ## Layout
 
 | Path                    | Contents                                                                                                  |
